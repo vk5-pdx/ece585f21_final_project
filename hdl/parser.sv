@@ -1,7 +1,10 @@
 /****************************************************************
  * parser.sv - parses the input file and generates
  *
- * Author        : Viraj Khatri (vk5@pdx.edu)
+ * Authors       : Viraj Khatri (vk5@pdx.edu)
+ *               : Varden Prabahr (nagavar2@pdx.edu)
+ *               : Sai Krishnan (saikris2@pdx.edu)
+ *               : Chirag Chaudhari (chirpdx@pdx.edu)
  * Last Modified : 20th October, 2021
  *
  * Description   :
@@ -19,11 +22,11 @@ module parser
 
 	// outputs
 	output logic                           op_ready_s, // strobe signal, new op available to latch
-	output parsed_op_t                     opcode,
-	output logic       [ADDRESS_WIDTH-1:0] address,
+	output parsed_op_t                     opcode,     // output signal corresponding to parsed op
+	output logic       [ADDRESS_WIDTH-1:0] address,    // output address corresponding to parsed address
 
 	// debugging outputs
-	output parser_states_t                 state
+	output parser_states_t                 state       // debugging purposes only
 );
 
 // open input trace file
@@ -38,73 +41,88 @@ initial begin
 end
 
 // variables to store input from trace file
+int                             parsed_clock = 0;
+parsed_op_t                     parsed_op = NOP;
+logic       [ADDRESS_WIDTH-1:0] parsed_address = 0;
+
+// stores how many "absolute" clock cycles have passed
 int clock_count = 0;
-int temp_clock = 0;
-parsed_op_t temp_op = NOP;
-logic [ADDRESS_WIDTH-1:0] temp_address = 0;
 
-
-// reading from file every clock pulse
+// file read
 int scan_file;
-always_ff@(posedge clk) begin
+always_ff@(posedge clk or negedge clk) begin
 	clock_count++;
-	scan_file = $fscanf(trace_file, "%d %d %h\n", temp_clock, temp_op, temp_address);
-	//if (!$feof(trace_file)) begin
-	//end
+	if (curr_state == READING) begin
+		scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
+	end
+	if ($feof(trace_file)) begin
+		//if something needs to be done at EOF
+	end
 end
 
-// internal variables
+// internal state variables
 parser_states_t curr_state, next_state;
-assign state = curr_state;
+assign state = curr_state; // debug purposes
 
-// next state logic
+/*********************
+ * state transistion *
+ *********************/
+always_ff@(posedge clk or negedge clk or negedge rst_n) begin
+
+	if (!rst_n) begin
+		clock_count <= 0;                   // clock count to 0 under reset to restart all
+		                                    // parsing on demand
+
+		curr_state <= READING;                      // on reset, reloading the trace file by
+		$fclose(trace_file);                        // opening and closing it, this is done
+		trace_file <= $fopen(FILE_IN, "r");         // to start scanning lines from the start again
+		if (trace_file == 0) begin
+			$display("%s handle was NULL", FILE_IN);
+			$finish;
+		end
+	end else begin
+		curr_state <= next_state;
+	end
+end
+
+/********************
+ * next state logic *
+ ********************/
 always_comb begin
 	unique case(curr_state)
 		READING : begin
-			// clock_count == temp_clock-1 is checked as entry to next stage as stage
-			// transistion will happen on half clock cycle (negedge clk) thus
-			// the state will be NEW_OP when new data is to be outputted
-			if (clock_count == temp_clock-1) next_state = NEW_OP;
-			else next_state = READING;
+			next_state = NEW_OP; // we have already read the inupts at this point,
+			                     // se we don't have to stay in this state for more than 1 cycle
+			                     // if we loiter here we will "scan" next line in trace file
+			                     // and miss one set of instructions as it will not be strobed by
+			                     // op_ready_s
 		end
 		NEW_OP : begin
-			if (clock_count == temp_clock) next_state = STROBE_DONE;
-		end
-		STROBE_DONE : begin
-			// same as explained in READING state, keep state same
-			if (clock_count == temp_clock-1) next_state = NEW_OP;
-			else next_state = STROBE_DONE;
+			if (clock_count == parsed_clock) next_state = READING; // we have strobed at this point, so no
+			                                                       // need to read next instruction from trace file
+			else next_state = NEW_OP;  // it's not time to strobe yet,
+			                           // so we don't switch states
 		end
 	endcase
 end
 
-// state transistion
-always_ff@(posedge clk or negedge clk or negedge rst_n) begin
-	if (!rst_n) begin
-		curr_state = READING;
-	end else begin
-		curr_state = next_state;
-	end
-end
-
-// data path
+/*******************
+ * data path block *
+ *******************/
+assign address = parsed_address; // because data is only latched on op_ready_s strobe
+assign opcode = parsed_op;       // we can safely assign parsed data to output
+                                 // without fear of providing invalid data
 always_comb begin
 	unique case(curr_state)
 		READING : begin
-			op_ready_s = 1'b0;
-			opcode = NOP;
-			address = 'X;
+			op_ready_s = 1'b0; // (valid data + posedge op_ready_s) has been delivered
+			                   // so we setup for next valid data and strobe by
+			                   // setting it to 0
 		end
 		NEW_OP : begin
-			if (temp_clock == clock_count) begin // strobe only required when clock count actually matches
-				op_ready_s = 1'b1;           // data on output signals is not latched without strobe
-				address = temp_address;
-				opcode = temp_op;
-			end
-		end
-		STROBE_DONE : begin
-			op_ready_s = 1'b0; // address on output signal does not need to be changed as strobe is set to low,
-			                   // This enables the next new_op state to send a posedge on op_ready_s
+			if (parsed_clock == clock_count) op_ready_s = 1'b1; // strobe only required when clock count
+			                                                    // actually matches so the timing of this
+			                                                    // instruction from the trace file is met
 		end
 	endcase
 end
