@@ -29,16 +29,9 @@ module parser
 	output parser_states_t                 state       // debugging purposes only
 );
 
-// open input trace file
+// defining file handling veriables
 localparam string FILE_IN = "trace_file";
-int trace_file;
-initial begin
-	trace_file = $fopen(FILE_IN, "r");
-	if (trace_file == 0) begin
-		$display("%s handle was NULL", FILE_IN);
-		$finish;
-	end
-end
+int trace_file, scan_file;
 
 // variables to store input from trace file
 int                             parsed_clock = 0;
@@ -48,25 +41,17 @@ logic       [ADDRESS_WIDTH-1:0] parsed_address = 0;
 // stores how many "absolute" clock cycles have passed
 int clock_count = 0;
 
-// file read
-int scan_file;
-always_ff@(posedge clk or negedge clk) begin
-	clock_count++;
-	if (curr_state == READING) begin
-		scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
-	end
-	if ($feof(trace_file)) begin
-		//if something needs to be done at EOF
-	end
-end
-
 // internal state variables
-parser_states_t curr_state, next_state;
+parser_states_t curr_state = READING, next_state;
 assign state = curr_state; // debug purposes
 
-/*********************
- * state transistion *
- *********************/
+/*******************************************
+ * memory elements of FSM                  *
+ * manages -                               *
+ * 1. next_state -> current_state          *
+ * 2. opening and closing file on reset    *
+ * 3. scanning 1 line when state = READING *
+ ******************************************/
 always_ff@(posedge clk or negedge clk or negedge rst_n) begin
 
 	if (!rst_n) begin
@@ -81,7 +66,21 @@ always_ff@(posedge clk or negedge clk or negedge rst_n) begin
 			$finish;
 		end
 	end else begin
+		clock_count++;
 		curr_state <= next_state;
+
+		// file read into parsed_* variables
+		// parsed_clock -> used to compare with absolute clock to drive a strobe
+		//                 on op_ready_s
+		// parsed_op    -> continuous assigned to output signal opcode
+		// parsed_add.  -> continuous assigned to output signal address
+		if (curr_state == READING) begin
+			scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
+		end
+		if ($feof(trace_file)) begin
+			//if something needs to be done at EOF
+		end
+
 	end
 end
 

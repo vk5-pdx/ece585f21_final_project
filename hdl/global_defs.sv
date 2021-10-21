@@ -30,7 +30,7 @@ typedef enum logic[1:0] {
 // parser module states
 typedef enum logic {
 	READING,     // reading from file
-	NEW_OP,      // if clock count matches entry from trace file, output stuff from parser
+	NEW_OP       // if clock count matches entry from trace file, output stuff from parser
 	             // otherwise wait in this state and keep counting
 } parser_states_t;
 
