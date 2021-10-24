@@ -1,0 +1,23 @@
+vsim -voptargs=+acc work.parser_tb
+# End time: 10:28:47 on Oct 24,2021, Elapsed time: 38:03:32
+# Errors: 1, Warnings: 0
+# vsim -voptargs="+acc" work.parser_tb 
+# Start time: 10:28:47 on Oct 24,2021
+# ** Note: (vsim-8009) Loading existing optimized design _opt
+# Loading sv_std.std
+# Loading work.global_defs(fast)
+# Loading work.parser_tb_sv_unit(fast)
+# Loading work.parser_tb(fast)
+# Loading work.parser_sv_unit(fast)
+# Loading work.parser(fast)
+run -all
+# ** Error (suppressible): (vsim-PLI-3084) /home/nagavar2/common/Downloads/MSD_PROJECT/parser.sv(82): $fscanf : Argument 1 is not a valid file descriptor.
+#    Time: 0 ns  Iteration: 0  Instance: /parser_tb/dut
+# TIme =                    0    MemCode = x    address = xxxxxxxx
+# TIme =                   40    MemCode = 2    address = 1ff97000
+# TIme =                   41    MemCode = 2    address = 1ff97080
+# TIme =                   42    MemCode = 0    address = 0fffff00
+# TIme =                   50    MemCode = 1    address = 0fffff80
+# ** Note: $stop    : /home/nagavar2/common/Downloads/MSD_PROJECT/parser_tb.sv(46)
+#    Time: 1010 ns  Iteration: 0  Instance: /parser_tb
+# Break in Module parser_tb at /home/nagavar2/common/Downloads/MSD_PROJECT/parser_tb.sv line 46
