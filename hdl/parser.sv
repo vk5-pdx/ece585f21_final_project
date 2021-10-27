@@ -30,7 +30,8 @@ module parser
 );
 
 // defining file handling veriables
-localparam string FILE_IN = "/home/nagavar2/common/Downloads/MSD_PROJECT/trace_file.txt"; //trace file is the example in the description
+localparam string FILE_IN = "/trace_file.txt"; //trace file is the example in the description
+
 int unsigned trace_file, scan_file;
 
 // variables to store input from trace file
@@ -104,6 +105,5 @@ always_comb begin
 	endcase
 end
 
-
-
 endmodule : parser
+
