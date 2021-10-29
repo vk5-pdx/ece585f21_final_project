@@ -35,3 +35,4 @@ typedef enum logic {
 } parser_states_t;
 
 endpackage : global_defs
+
