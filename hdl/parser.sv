@@ -5,7 +5,7 @@
  *               : Varden Prabahr (nagavar2@pdx.edu)
  *               : Sai Krishnan (saikris2@pdx.edu)
  *               : Chirag Chaudhari (chirpdx@pdx.edu)
- * Last Modified : 20th October, 2021
+ * Last Modified : 29th October, 2021
  *
  * Description   :
  * -----------
@@ -25,12 +25,12 @@ module parser
 	output logic       [ADDRESS_WIDTH-1:0] address,    // output address corresponding to parsed address
 
 	// debugging outputs
-	output parser_states_t                 state,       // debugging purposes only
-	output int unsigned clock_count
+	output parser_states_t                 state,      // debugging purposes only
+	output int unsigned                    clock_count
 );
 
 // defining file handling veriables
-localparam string FILE_IN = "/u/nagavar2/Downloads/MSD_PROJECT/trace_file.txt"; //trace file is the example in the description
+localparam string FILE_IN = "../trace_file.txt"; // trace file is the example in the description
 int unsigned trace_file, scan_file;
 
 // variables to store input from trace file
@@ -69,30 +69,29 @@ always_ff@(posedge clk or negedge clk or negedge rst_n) begin
 	end
 end
 
-/********************
- * next state logic *
- modeled as mealy machine
- ********************/
+/****************************
+ *     next state logic     *
+ * modeled as mealy machine *
+ ****************************/
 always_comb begin
 	unique case(curr_state)
 		READING : begin
 			scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address); //first read by reset
 			if (clock_count  == parsed_clock) begin
-			next_state = READING;		 								//if condition statifies read the next line and strobe the 
-			address = parsed_address;									// values
-			opcode = parsed_op;
+				next_state = READING;     // if condition statifies read the next line and strobe the 
+				address = parsed_address; // values
+				opcode = parsed_op;
 			end
 			else next_state = NEW_OP;
 
 		end
 		NEW_OP : begin
 			if (clock_count  == parsed_clock) begin // This condition is used when the instruction is in the next clock cycle
-						next_state = READING;
-						address = parsed_address;
-						opcode = parsed_op;
-						scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
+				next_state = READING;
+				address = parsed_address;
+				opcode = parsed_op;
+				scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
 			end
-
 			else next_state = NEW_OP;
 		end
 	endcase
