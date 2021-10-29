@@ -1,6 +1,6 @@
-# vsim -c work.parser 
-# Start time: 12:41:45 on Oct 20,2021
-# ** Note: (vsim-3812) Design is being optimized...
+# vsim -c work.parser_tb 
+# Start time: 13:08:45 on Oct 29,2021
+# ** Note: (vsim-3813) Design is being optimized due to module recompilation...
 # //  Questa Sim-64
 # //  Version 2019.2_1 linux_x86_64 May 13 2019
 # //
@@ -15,10 +15,23 @@
 # //  is prohibited from disclosure under the Trade Secrets Act,
 # //  18 U.S.C. Section 1905.
 # //
-# ** Warning: License feature 'msimhdlsim' will expire in 11 days.
+# ** Warning: License feature 'msimhdlsim' will expire in 2 days.
 # Loading sv_std.std
 # Loading work.global_defs(fast)
 # Loading work.parser_sv_unit(fast)
-# Loading work.parser(fast)
-# End time: 12:41:47 on Oct 20,2021, Elapsed time: 0:00:02
-# Errors: 0, Warnings: 0
+# Loading work.parser_tb_sv_unit(fast)
+# Loading work.parser_tb(fast)
+# 10 simulation ticks = 1 clock cycle
+# ** Error (suppressible): (vsim-PLI-3084) $fscanf : Argument 1 is not a valid file descriptor.
+#    Time: 0 ns  Iteration: 0  Process: /parser_tb/dut/#ALWAYS#80 File: /u/vk5/college/git/ece585f21_final_project/sim/../hdl/parser.sv Line: 83
+#                    0 : Clock_count =          0	MemCode = 3	Address = 00000000
+#                  305 : Clock_count =         30	MemCode = 2	Address = 1ff97000
+#                  315 : Clock_count =         31	MemCode = 2	Address = 1ff97080
+#                  325 : Clock_count =         32	MemCode = 0	Address = 0fffff00
+#                  405 : Clock_count =         40	MemCode = 1	Address = 0fffff80
+# ** Note: $stop    : /u/vk5/college/git/ece585f21_final_project/sim/../hdl/parser_tb.sv(44)
+#    Time: 10010 ns  Iteration: 0  Instance: /parser_tb
+# Break at /u/vk5/college/git/ece585f21_final_project/sim/../hdl/parser_tb.sv line 44
+# Stopped at /u/vk5/college/git/ece585f21_final_project/sim/../hdl/parser_tb.sv line 44
+# End time: 13:09:57 on Oct 29,2021, Elapsed time: 0:01:12
+# Errors: 1, Warnings: 0

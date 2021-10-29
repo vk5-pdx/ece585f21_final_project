@@ -32,6 +32,8 @@
 end
 
     initial begin
+
+		 $display("10 simulation ticks = 1 clock cycle");
           
           rst_n = 1'b0;
         #10;
@@ -44,7 +46,7 @@ end
     end
 
     always@(opcode, address) begin
-        $strobe ("Clock_count = %d    MemCode = %d    address = %h",clock_count,opcode,address); //monitors output when the address or opcode changes
+        $strobe ("%d : Clock_count = %d\tMemCode = %d\tAddress = %h",$time, clock_count,opcode,address); //monitors output when the address or opcode changes
       
     end
  endmodule

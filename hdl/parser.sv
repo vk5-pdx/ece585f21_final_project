@@ -30,8 +30,13 @@ module parser
 );
 
 // defining file handling veriables
-localparam string FILE_IN = "../trace_file.txt"; // trace file is the example in the description
 int unsigned trace_file, scan_file;
+
+// we also need filepath with tracefile, so we extrace PWD using getenv function
+// make use of the SystemVerilog C programming interface
+// https://stackoverflow.com/questions/33394999/how-can-i-know-my-current-path-in-system-verilog
+import "DPI-C" function string getenv(input string env_name);
+
 
 // variables to store input from trace file
 int                             parsed_clock = 0;
@@ -57,17 +62,16 @@ always_ff@(posedge clk or negedge clk or negedge rst_n) begin
 		clock_count <= 0;                   // clock count to 0 under reset to restart all
 		                                    // parsing on demand
 
-		curr_state <= READING;                      // on reset, reloading the trace file by
-		$fclose(trace_file);                        // opening and closing it, this is done
-		trace_file <= $fopen(FILE_IN, "r");         // to start scanning lines from the start again
+		curr_state <= READING;              // on reset, reloading the trace file by opening and closing it,
+		$fclose(trace_file);                // this is done to start scanning lines from the start again
+		trace_file <= $fopen({getenv("PWD"), "/../trace_file.txt"}, "r");
 
 	end else begin
-		clock_count <= clock_count + 0.5;		//clock_count increases in 0.5 because this block is operated in both clock edges
 		curr_state <= next_state;
-
-
 	end
 end
+
+always_ff@(posedge clk) if (rst_n) clock_count++; // if not in reset (active low) then increment
 
 /****************************
  *     next state logic     *
@@ -90,7 +94,6 @@ always_comb begin
 				next_state = READING;
 				address = parsed_address;
 				opcode = parsed_op;
-				scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
 			end
 			else next_state = NEW_OP;
 		end
