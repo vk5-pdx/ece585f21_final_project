@@ -1,6 +1,6 @@
 ### CPU memory address to topological address mapping
 
-* DDR4 DIMM outputs 8 bytes per cycle = 2<sup>3</sup> => 3 Byte-select bits
+* DDR4 DIMM outputs 8 bytes per half-cycle = 2<sup>3</sup> => 3 Byte-select bits
 * Burst length is 8n => 3 Lower Column bits
 * Page Size = 2KiB = 2<sup>11</sup> Bytes
   FIFO and Data MUX holds 8 Bytes (1 Byte per burst) = 2<sup>3</sup> Bytes
