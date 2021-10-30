@@ -18,7 +18,7 @@ import global_defs::*;
 module parser
 (
 	// inputs
-	input logic                           clk, rst_n,
+	input  logic                           clk, rst_n,
 
 	// outputs
 	output logic                           op_ready_s,
@@ -37,7 +37,7 @@ int unsigned trace_file, scan_file;
 // make use of the SystemVerilog C programming interface
 // https://stackoverflow.com/questions/33394999/how-can-i-know-my-current-path-in-system-verilog
 import "DPI-C" function string getenv(input string env_name);
-
+string trace_filename;
 
 // variables to store input from trace file
 logic                    [31:0] parsed_clock = 'x;
@@ -64,9 +64,15 @@ always_ff@(posedge clk ) begin
 		clock_count <= 0;                   // clock count to 0 under reset to restart all
 		                                    // parsing on demand
 		half <= 1'b0;
-		curr_state <= RESET;              // on reset, reloading the trace file by opening and closing it,
+		curr_state <= RESET;                // on reset, reloading the trace file by opening and closing it,
 		$fclose(trace_file);                // this is done to start scanning lines from the start again
-		trace_file <= $fopen({getenv("PWD"), "/../trace_file.txt"}, "r");
+
+		if (!$value$plusargs("tracefile=%s", trace_filename)) begin
+			trace_filename = {getenv("PWD"), "/../trace_file.txt"};
+			$display("No trace file provided in argument. eg. +tracefile=<full_path_to_file>");
+			$display("taking trace file as default (%s) provided in repository", trace_filename);
+		end
+		trace_file <= $fopen(trace_filename, "r");
 
 	end else begin
 		curr_state <= next_state;
