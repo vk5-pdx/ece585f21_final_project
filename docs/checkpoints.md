@@ -3,7 +3,7 @@
 * DDR4 DIMM outputs 8 bytes per half-cycle = 2<sup>3</sup> => 3 Byte-select bits
 * Burst length is 8n => 3 Lower Column bits
 * Page Size = 2KiB = 2<sup>11</sup> Bytes
-  FIFO and Data MUX holds 8 Bytes (1 Byte per burst) = 2<sup>3</sup> Bytes
+  FIFO and Data MUX holds 8 Bytes (1 Byte per half-cycle of burst) = 2<sup>3</sup> Bytes
   Thus, 2<sup>11</sup>/2<sup>3</sup> = 2<sup>8</sup> => 8 Higher Column bits
 * Chosen design is 4 Bank-Groups with 4 Banks each => 2 Bank Select Bits, 2 Bank Group Select Bits
 * An 8GiB DIMM has 2<sup>33</sup> addresses => 33-bits for addressing a single byte
