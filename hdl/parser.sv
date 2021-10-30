@@ -78,27 +78,51 @@ always_ff@(posedge clk) if (rst_n) clock_count++; // if not in reset (active low
  *     next state logic     *
  * modeled as mealy machine *
  ****************************/
+//Combinational Logic
 always_comb begin
 	unique case(curr_state)
 		READING : begin
 			scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address); //first read by reset
-			if (clock_count  == parsed_clock) begin
+			if (clock_count == parsed_clock) begin
+
 				op_ready_s = 1'b1;
-				next_state = READING;     // if condition statifies read the next line and strobe the 
-				address = parsed_address; // values
+				address = parsed_address;
 				opcode = parsed_op;
 			end
 			else begin
-				next_state = NEW_OP;
 				op_ready_s = 1'b0;
 			end
 		end
 		NEW_OP : begin
-			if (clock_count  == parsed_clock) begin// This condition is used when the instruction is in the next clock cycle
-				next_state = READING;
+			if (clock_count == parsed_clock) begin
+
 				address = parsed_address;
 				opcode = parsed_op;
+				op_ready_s = 1'b1;
 
+			end
+			else begin
+				op_ready_s = 1'b0;
+			end
+		end
+	endcase
+end
+
+//next state logic
+always_comb begin
+	unique case(curr_state)
+		READING : begin
+
+			if (clock_count  == parsed_clock) begin
+				next_state = READING;
+			end
+			else begin
+				next_state = NEW_OP;
+			end
+		end
+		NEW_OP : begin
+			if (clock_count  == parsed_clock) begin
+				next_state = READING;
 			end
 			else next_state = NEW_OP;
 		end
