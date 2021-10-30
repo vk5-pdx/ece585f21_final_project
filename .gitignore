@@ -1,3 +1,5 @@
 sim/work
 sim/transcript
 sim/*.wlf
+sim/*.mti
+sim/*.mpf
