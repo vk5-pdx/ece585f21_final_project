@@ -39,7 +39,7 @@ module parser_tb();
 		$stop;
 	end
 
-	always@(opcode, address) begin
+	always@(opcode, address, op_ready_s) begin
 		$strobe ("%d : Clock_count = %d\tMemCode = %d\tAddress = %h\top_ready_s = %b",$time, clock_count,opcode,address,op_ready_s); //monitors output when the address or opcode changes
 	end
 

@@ -40,9 +40,9 @@ import "DPI-C" function string getenv(input string env_name);
 
 
 // variables to store input from trace file
-int                             parsed_clock = 0;
+logic                    [31:0] parsed_clock = 'x;
 parsed_op_t                     parsed_op = NOP;
-logic       [ADDRESS_WIDTH-1:0] parsed_address = 0;
+logic       [ADDRESS_WIDTH-1:0] parsed_address = 'x;
 
 
 
@@ -57,22 +57,31 @@ assign state = curr_state; // debug purposes
  * 2. opening and closing file on reset    *
  * 3. scanning 1 line when state = READING *
  ******************************************/
-always_ff@(posedge clk or negedge clk or negedge rst_n) begin
+logic half = 1'b0;
+always_ff@(posedge clk ) begin
 
 	if (!rst_n) begin
 		clock_count <= 0;                   // clock count to 0 under reset to restart all
 		                                    // parsing on demand
-
-		curr_state <= READING;              // on reset, reloading the trace file by opening and closing it,
+		half <= 1'b0;
+		curr_state <= RESET;              // on reset, reloading the trace file by opening and closing it,
 		$fclose(trace_file);                // this is done to start scanning lines from the start again
 		trace_file <= $fopen({getenv("PWD"), "/../trace_file.txt"}, "r");
 
 	end else begin
 		curr_state <= next_state;
+		if(half)
+		clock_count++;
+		half <= ~half;
+		if(next_state == READING)
+		scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
+		if(scan_file == 0)
+		begin
+			$display("Invalid trace_file entry\n");
+			$finish;
+		end
 	end
 end
-
-always_ff@(posedge clk) if (rst_n) clock_count++; // if not in reset (active low) then increment
 
 /****************************
  *     next state logic     *
@@ -81,17 +90,15 @@ always_ff@(posedge clk) if (rst_n) clock_count++; // if not in reset (active low
 //Combinational Logic
 always_comb begin
 	unique case(curr_state)
+		RESET : begin
+			op_ready_s = 1'b0;
+			address = 'x;
+			opcode = NOP;
+		end
 		READING : begin
-			scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address); //first read by reset
-			if (clock_count == parsed_clock) begin
-
-				op_ready_s = 1'b1;
-				address = parsed_address;
-				opcode = parsed_op;
-			end
-			else begin
-				op_ready_s = 1'b0;
-			end
+			op_ready_s = 1'b0;
+			address = 'x;
+			opcode = NOP;
 		end
 		NEW_OP : begin
 			if (clock_count == parsed_clock) begin
@@ -103,6 +110,8 @@ always_comb begin
 			end
 			else begin
 				op_ready_s = 1'b0;
+				address = parsed_address;
+				opcode = parsed_op;
 			end
 		end
 	endcase
@@ -111,15 +120,8 @@ end
 //next state logic
 always_comb begin
 	unique case(curr_state)
-		READING : begin
-
-			if (clock_count  == parsed_clock) begin
-				next_state = READING;
-			end
-			else begin
-				next_state = NEW_OP;
-			end
-		end
+		RESET : next_state = READING;
+		READING :next_state = NEW_OP;
 		NEW_OP : begin
 			if (clock_count  == parsed_clock) begin
 				next_state = READING;
