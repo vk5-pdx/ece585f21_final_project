@@ -11,42 +11,36 @@
  * -----------
  * Testbench for parser
  ****************************************************************/
- import global_defs::*;
- module parser_tb();
+import global_defs::*;
+module parser_tb();
 
-    //naming variables for the design
-    parameter ADDRESS_WIDTH = 32;
-    int unsigned clock_count;
-    logic                       clk, rst_n;
-    logic                       op_ready_s; 
-    logic                       [ADDRESS_WIDTH-1:0] address;
-	parsed_op_t                 opcode; 
-        
-	parser_states_t             state;    
-  
-    parser dut (.*);
+	//naming variables for the design
+	parameter ADDRESS_WIDTH = 32;
+	int unsigned clock_count;
+	logic                       clk, rst_n;
+	logic                       op_ready_s; 
+	logic                       [ADDRESS_WIDTH-1:0] address;
+	parsed_op_t                 opcode;
+	parser_states_t             state;
 
-     initial begin          //generating clock
-	clk = 0;
-	forever #5 clk = ~clk;
-end
+	parser dut (.*);
 
-    initial begin
+	initial begin          //generating clock
+		clk = 0;
+		forever #5 clk = ~clk;
+	end
 
-		 $display("10 simulation ticks = 1 clock cycle");
-          
-          rst_n = 1'b0;
-        #10;
-        rst_n = 1'b1;
-        op_ready_s = 1'b0;
-        #10000 ;
+	initial begin
+		$display("10 simulation ticks = 1 clock cycle");
+		rst_n = 1'b0;
+		#10;
+		rst_n = 1'b1;
+		#10000;
+		$stop;
+	end
 
-        $stop;
-        
-    end
+	always@(opcode, address) begin
+		$strobe ("%d : Clock_count = %d\tMemCode = %d\tAddress = %h\top_ready_s = %b",$time, clock_count,opcode,address,op_ready_s); //monitors output when the address or opcode changes
+	end
 
-    always@(opcode, address) begin
-        $strobe ("%d : Clock_count = %d\tMemCode = %d\tAddress = %h",$time, clock_count,opcode,address); //monitors output when the address or opcode changes
-      
-    end
- endmodule
+endmodule

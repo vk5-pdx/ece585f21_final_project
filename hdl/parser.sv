@@ -18,9 +18,10 @@ import global_defs::*;
 module parser
 (
 	// inputs
-	input  logic                           clk, rst_n,
+	input logic                           clk, rst_n,
 
 	// outputs
+	output logic                           op_ready_s,
 	output parsed_op_t                     opcode,     // output signal corresponding to parsed op
 	output logic       [ADDRESS_WIDTH-1:0] address,    // output address corresponding to parsed address
 
@@ -82,18 +83,22 @@ always_comb begin
 		READING : begin
 			scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address); //first read by reset
 			if (clock_count  == parsed_clock) begin
+				op_ready_s = 1'b1;
 				next_state = READING;     // if condition statifies read the next line and strobe the 
 				address = parsed_address; // values
 				opcode = parsed_op;
 			end
-			else next_state = NEW_OP;
-
+			else begin
+				next_state = NEW_OP;
+				op_ready_s = 1'b0;
+			end
 		end
 		NEW_OP : begin
-			if (clock_count  == parsed_clock) begin // This condition is used when the instruction is in the next clock cycle
+			if (clock_count  == parsed_clock) begin// This condition is used when the instruction is in the next clock cycle
 				next_state = READING;
 				address = parsed_address;
 				opcode = parsed_op;
+
 			end
 			else next_state = NEW_OP;
 		end
