@@ -21,23 +21,23 @@ module parser
 	input  logic                           clk, rst_n,
 
 	// outputs
-	output logic                           op_ready_s,
+	output logic                           op_ready_s, // strobe signal, new op available to latch
 	output parsed_op_t                     opcode,     // output signal corresponding to parsed op
 	output logic       [ADDRESS_WIDTH-1:0] address,    // output address corresponding to parsed address
 
 	// debugging outputs
 	output parser_states_t                 state,      // debugging purposes only
-	output int unsigned                    clock_count
+	output int unsigned                    clock_count // counting clock to compare to parsed clock
 );
 
 // defining file handling veriables
 int unsigned trace_file, scan_file;
+string trace_filename;
 
 // we also need filepath with tracefile, so we extrace PWD using getenv function
 // make use of the SystemVerilog C programming interface
 // https://stackoverflow.com/questions/33394999/how-can-i-know-my-current-path-in-system-verilog
 import "DPI-C" function string getenv(input string env_name);
-string trace_filename;
 
 // variables to store input from trace file
 logic                    [31:0] parsed_clock = 'x;
@@ -55,8 +55,8 @@ assign state = curr_state; // debug purposes
  * manages -                               *
  * 1. next_state -> current_state          *
  * 2. opening and closing file on reset    *
- * 3. scanning 1 line when state = READING *
- ******************************************/
+ * 3. scanning a line when state = READING *
+ *******************************************/
 logic half = 1'b0;
 always_ff@(posedge clk ) begin
 
@@ -90,10 +90,9 @@ always_ff@(posedge clk ) begin
 end
 
 /****************************
- *     next state logic     *
+ *     data flow logic      *
  * modeled as mealy machine *
  ****************************/
-//Combinational Logic
 always_comb begin
 	unique case(curr_state)
 		RESET : begin
@@ -123,7 +122,9 @@ always_comb begin
 	endcase
 end
 
-//next state logic
+/********************
+ * next state logic *
+ ********************/
 always_comb begin
 	unique case(curr_state)
 		RESET : next_state = READING;
