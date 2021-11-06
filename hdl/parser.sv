@@ -25,12 +25,12 @@ module parser
 	input  logic                           clk, rst_n,
 
 	// outputs
-	output logic                           op_ready_s, // strobe signal, new op available to latch
-	output parsed_op_t                     opcode,     // output signal corresponding to parsed op
-	output logic       [ADDRESS_WIDTH-1:0] address,    // output address corresponding to parsed address
+	output logic                           op_ready_s,     // strobe signal, new op available to latch
+	output parsed_op_t                     opcode,         // output signal corresponding to parsed op
+	output logic       [ADDRESS_WIDTH-1:0] address,        // output address corresponding to parsed address
 
 	// debugging outputs
-	output parser_states_t                 state,      // debugging purposes only
+	output parser_states_t                 state,          // debugging purposes only
 	output int unsigned                    CPU_cycle_count // counting clock to compare to parsed clock
 );
 
@@ -39,13 +39,10 @@ int unsigned trace_file, scan_file;
 string trace_filename;
 
 
-
-
 // variables to store input from trace file
 logic                    [31:0] parsed_clock = 'x;
 parsed_op_t                     parsed_op = NOP;
 logic       [ADDRESS_WIDTH-1:0] parsed_address = 'x;
-
 
 
 // internal state variables
@@ -63,11 +60,11 @@ logic half = 1'b0;
 always_ff@(posedge clk ) begin
 
 	if (!rst_n) begin
-		CPU_cycle_count <= 0;                   // clock count to 0 under reset to restart all
-		                                    // parsing on demand
+		CPU_cycle_count <= 0; // clock count to 0 under reset to restart all
+		                      // parsing on demand
 		half <= 1'b0;
-		curr_state <= RESET;                // on reset, reloading the trace file by opening and closing it,
-		$fclose(trace_file);                // this is done to start scanning lines from the start again
+		curr_state <= RESET;  // on reset, reloading the trace file by opening and closing it,
+		$fclose(trace_file);  // this is done to start scanning lines from the start again
 
 		if (!$value$plusargs("tracefile=%s", trace_filename)) begin
 			trace_filename = {getenv("PWD"), "/../trace_file.txt"};
