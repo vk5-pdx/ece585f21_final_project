@@ -5,7 +5,7 @@
  *               : Varden Prabahr (nagavar2@pdx.edu)
  *               : Sai Krishnan (saikris2@pdx.edu)
  *               : Chirag Chaudhari (chirpdx@pdx.edu)
- * Last Modified : 29th October, 2021
+ * Last Modified : 6th November, 2021
  *
  * Description   :
  * -----------
@@ -13,7 +13,11 @@
  * specified clock cycle
  ****************************************************************/
 
+// we also need filepath with tracefile, so we extrace PWD using getenv function
+// make use of the SystemVerilog C programming interface
+// https://stackoverflow.com/questions/33394999/how-can-i-know-my-current-path-in-system-verilog
 import global_defs::*;
+import "DPI-C" function string getenv(input string env_name);
 
 module parser
 (
@@ -27,17 +31,15 @@ module parser
 
 	// debugging outputs
 	output parser_states_t                 state,      // debugging purposes only
-	output int unsigned                    clock_count // counting clock to compare to parsed clock
+	output int unsigned                    CPU_cycle_count // counting clock to compare to parsed clock
 );
 
 // defining file handling veriables
 int unsigned trace_file, scan_file;
 string trace_filename;
 
-// we also need filepath with tracefile, so we extrace PWD using getenv function
-// make use of the SystemVerilog C programming interface
-// https://stackoverflow.com/questions/33394999/how-can-i-know-my-current-path-in-system-verilog
-import "DPI-C" function string getenv(input string env_name);
+
+
 
 // variables to store input from trace file
 logic                    [31:0] parsed_clock = 'x;
@@ -61,7 +63,7 @@ logic half = 1'b0;
 always_ff@(posedge clk ) begin
 
 	if (!rst_n) begin
-		clock_count <= 0;                   // clock count to 0 under reset to restart all
+		CPU_cycle_count <= 0;                   // clock count to 0 under reset to restart all
 		                                    // parsing on demand
 		half <= 1'b0;
 		curr_state <= RESET;                // on reset, reloading the trace file by opening and closing it,
@@ -77,7 +79,7 @@ always_ff@(posedge clk ) begin
 	end else begin
 		curr_state <= next_state;
 		if(half)
-		clock_count++;
+		CPU_cycle_count++;
 		half <= ~half;
 		if(next_state == READING)
 		scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
@@ -106,7 +108,7 @@ always_comb begin
 			opcode = NOP;
 		end
 		NEW_OP : begin
-			if (clock_count == parsed_clock) begin
+			if (CPU_cycle_count == parsed_clock) begin
 
 				address = parsed_address;
 				opcode = parsed_op;
@@ -130,11 +132,11 @@ always_comb begin
 		RESET : next_state = READING;
 		READING :next_state = NEW_OP;
 		NEW_OP : begin
-			if (clock_count  == parsed_clock) begin
+			if (CPU_cycle_count  == parsed_clock) begin
 				next_state = READING;
 			end
 			else next_state = NEW_OP;
 		end
 	endcase
 end
-endmodule
+endmodule : parser

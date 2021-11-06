@@ -5,7 +5,7 @@
  *               : Varden Prabahr (nagavar2@pdx.edu)
  *               : Sai Krishnan (saikris2@pdx.edu)
  *               : Chirag Chaudhari (chirpdx@pdx.edu)
- * Last Modified : 22th October, 2021
+ * Last Modified : 6th November, 2021
  *
  * Description   :
  * -----------
@@ -16,7 +16,7 @@ module parser_tb();
 
 	//naming variables for the design
 	parameter ADDRESS_WIDTH = 32;
-	int unsigned clock_count;
+	int unsigned CPU_cycle_count;
 	logic                       clk, rst_n;
 	logic                       op_ready_s; 
 	logic                       [ADDRESS_WIDTH-1:0] address;
@@ -40,7 +40,7 @@ module parser_tb();
 	end
 
 	always@(opcode, address, op_ready_s) begin
-		if ($test$plusargs("debug")) $strobe ("%d : Clock_count = %d\tMemCode = %d\tAddress = %h\top_ready_s = %b",$time, clock_count,opcode,address,op_ready_s); //monitors output when the address or opcode changes
+		if ($test$plusargs("debug")) $strobe ("%d : CPU_cycle_count = %d\tMemCode = %d\tAddress = %h\top_ready_s = %b",$time, CPU_cycle_count,opcode,address,op_ready_s); //monitors output when the address or opcode changes
 	end
 
 endmodule
