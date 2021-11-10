@@ -13,10 +13,11 @@
  * specified clock cycle
  ****************************************************************/
 
+import global_defs::*;
+
 // we also need filepath with tracefile, so we extrace PWD using getenv function
 // make use of the SystemVerilog C programming interface
 // https://stackoverflow.com/questions/33394999/how-can-i-know-my-current-path-in-system-verilog
-import global_defs::*;
 import "DPI-C" function string getenv(input string env_name);
 
 module parser
@@ -25,13 +26,14 @@ module parser
 	input  logic                           clk, rst_n,
 
 	// outputs
-	output logic                           op_ready_s,     // strobe signal, new op available to latch
-	output parsed_op_t                     opcode,         // output signal corresponding to parsed op
-	output logic       [ADDRESS_WIDTH-1:0] address,        // output address corresponding to parsed address
+	output logic                           op_ready_s,      // strobe signal, new op available to latch
+	output parsed_op_t                     opcode,          // output signal corresponding to parsed op
+	output logic       [ADDRESS_WIDTH-1:0] address,         // output address corresponding to parsed address
 
 	// debugging outputs
-	output parser_states_t                 state,          // debugging purposes only
-	output int unsigned                    CPU_cycle_count // counting clock to compare to parsed clock
+	output parser_states_t                 state,           // debugging purposes only
+	output int unsigned                    CPU_cycle_count, // counting clock to compare to parsed clock
+	output logic                           CPU_clk          // outputting CPU clock for other modules to use
 );
 
 // defining file handling veriables
@@ -49,6 +51,10 @@ logic       [ADDRESS_WIDTH-1:0] parsed_address = 'x;
 parser_states_t curr_state = READING, next_state;
 assign state = curr_state; // debug purposes
 
+// CPU clock generator, toggles on every clock, thus half-frequency
+logic half = 1'b0;
+assign CPU_clk = half;
+
 /*******************************************
  * memory elements of FSM                  *
  * manages -                               *
@@ -56,7 +62,6 @@ assign state = curr_state; // debug purposes
  * 2. opening and closing file on reset    *
  * 3. scanning a line when state = READING *
  *******************************************/
-logic half = 1'b0;
 always_ff@(posedge clk ) begin
 
 	if (!rst_n) begin
@@ -74,10 +79,12 @@ always_ff@(posedge clk ) begin
 		trace_file <= $fopen(trace_filename, "r");
 
 	end else begin
-		curr_state <= next_state;
-		if(half)
-		CPU_cycle_count++;
+
+		if (half) CPU_cycle_count++; // Counter for CPU clk
 		half <= ~half;
+
+		curr_state <= next_state;
+
 		if(next_state == READING)
 		scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
 		if(scan_file == 0)

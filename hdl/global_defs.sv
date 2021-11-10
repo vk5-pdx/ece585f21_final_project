@@ -17,6 +17,7 @@
 package global_defs;
 
 parameter ADDRESS_WIDTH = 32;
+parameter QUEUE_SIZE = 16;
 
 // 3 possible opcodes present in file + NOP extra
 typedef enum logic[1:0] {
