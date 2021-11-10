@@ -26,14 +26,14 @@ module parser
 	input  logic                           clk, rst_n,
 
 	// outputs
-	output logic                           op_ready_s,      // strobe signal, new op available to latch
-	output parsed_op_t                     opcode,          // output signal corresponding to parsed op
-	output logic       [ADDRESS_WIDTH-1:0] address,         // output address corresponding to parsed address
+	output logic                           op_ready_s,     // strobe signal, new op available to latch
+	output parsed_op_t                     opcode,         // output signal corresponding to parsed op
+	output logic       [ADDRESS_WIDTH-1:0] address,        // output address corresponding to parsed address
+	output logic                           CPU_clk,        // outputting CPU clock for other modules to use
 
 	// debugging outputs
-	output parser_states_t                 state,           // debugging purposes only
-	output int unsigned                    CPU_cycle_count, // counting clock to compare to parsed clock
-	output logic                           CPU_clk          // outputting CPU clock for other modules to use
+	output parser_states_t                 state,          // debugging purposes only
+	output int unsigned                    CPU_cycle_count // counting clock to compare to parsed clock
 );
 
 // defining file handling veriables
