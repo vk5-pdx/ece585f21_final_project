@@ -51,9 +51,9 @@ typedef struct {
 
 storage_t storage [QUEUE_SIZE];
 for (genvar i=0 ; i<QUEUE_SIZE; i++) begin : storage_output_assign
-	assign storage[i].address = address_queue[i];
-	assign storage[i].opcode = opcode_queue[i];
-	assign storage[i].counter = counter_queue[i];
+	assign address_queue[i] = storage[i].address;
+	assign opcode_queue[i] = storage[i].opcode;
+	assign counter_queue[i] = storage[i].counter;
 end : storage_output_assign
 
 // read and write pointers for FIFO
