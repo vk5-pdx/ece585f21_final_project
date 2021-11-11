@@ -62,7 +62,7 @@ assign read_p_out = read_p;
 assign write_p_out = write_p;
 
 // ff block with decision making for incoming requests
-always_ff@(posedge CPU_clk or negedge rst_n) begin
+always_ff@(negedge CPU_clk or negedge rst_n) begin
 	if (!rst_n) begin
 		read_p = '0;
 		write_p = '0;
@@ -103,7 +103,7 @@ always_ff@(posedge CPU_clk or negedge rst_n) begin
 end
 
 // ff block for evicting 100 CPU_clk cycles old requests
-always_ff@(posedge CPU_clk) begin
+always_ff@(negedge CPU_clk) begin
 	for (int i=0; i<QUEUE_SIZE; i++) begin
 		// we do not need to check fifo full/empty as valid bit implies that
 		// queue has some entries
