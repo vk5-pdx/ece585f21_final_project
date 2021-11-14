@@ -47,7 +47,6 @@ always_ff@(posedge CPU_clock) begin
 	end
 
 	else begin
-		insert_flag <= 0;
 		q_clock_count++;
 		
 		//When queue empty
@@ -63,6 +62,8 @@ always_ff@(posedge CPU_clock) begin
 				buffer_q.pop_back();
 				insert_flag <= 1;
 			end
+			else
+				insert_flag <= 0;
 		end
 		//concurrent read write
 		else if (buffer_q[$].CPU_clock_count == q_clock_count ) begin
@@ -81,14 +82,19 @@ always_ff@(posedge CPU_clock) begin
 				buffer_q.pop_back();
 				insert_flag <= 1;
 				end
+			else
+				insert_flag <= 0;
 		end	
 		
 		else if (queue.size() == DEPTH )begin
 			empty <= 1'b0;
 			full <= 1'b1;
 			$display("Time: %0t\tRequest cannot be statisfied!!! Queue is full",$time);
+			insert_flag <= 0;
 		
 		end
+		else
+			insert_flag <= 0;
 
 		end
 end
@@ -109,9 +115,15 @@ always_ff@(posedge CPU_clock) begin
 		for ( i=0; i < queue.size(); i++) begin
 			if(queue[i].life == 100) begin
 				$display("Time:%t\tThe element:%p was aged 100 and popped",$time,queue[i]);
+				fifo_output <= queue[i];
 				queue.delete(i);
 				$display("Time:%t\tThe remaining elements of queue are:%p",$time,queue);
 				exit_flag <=1;
+			end
+			else
+			begin
+				exit_flag <= 0;
+				fifo_output <= '0;
 			end
 		end
 	
