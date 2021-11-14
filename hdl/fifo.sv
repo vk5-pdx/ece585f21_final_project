@@ -54,10 +54,20 @@ always_ff@(posedge CPU_clock) begin
 	else begin
 		q_clock_count++;
 		
+		if (buffer_q[0].CPU_clock_count <= buffer_q[1].CPU_clock_count) begin
+			$display("%t :    ERROR    : trace file has invalid timing, discarding 2nd entry from from offending parties", $time);
+			$display("%t :     kept    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}'",
+					$time, buffer_q[1].CPU_clock_count, buffer_q[1].opcode, buffer_q[1].address, buffer_q[1].life);
+			$display("%t :   dropped   : element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}'",
+					$time, buffer_q[0].CPU_clock_count, buffer_q[0].opcode, buffer_q[0].address, buffer_q[0].life);
+
+			buffer_q.pop_front();
+		end
 		//When queue empty
 		if ( (queue.size() == 0) ) begin
 			full <= 1'b0;
 			empty <= 1'b1;
+
 
 			if( buffer_q[$].op_ready_s === 1'b1 ) begin
 				q_clock_count <= buffer_q[$].CPU_clock_count;		//advancing time
@@ -67,7 +77,7 @@ always_ff@(posedge CPU_clock) begin
 				// display pretty, code horrible
 				$display("%t :   INSERT    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}' was aged 100 and popped",
 						$time, buffer_q[$].CPU_clock_count, buffer_q[$].opcode, buffer_q[$].address, buffer_q[$].life);
-				$display("%t :             : queue elements now:'{",$time);
+				$display("%t :             : queue elements now :   '{",$time);
 				for (int j=0; j < queue.size(); j++) begin
 					$display("#                                                              '{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}',",
 						queue[j].CPU_clock_count, queue[j].opcode, queue[j].address, queue[j].life);
@@ -108,9 +118,12 @@ always_ff@(posedge CPU_clock) begin
 		
 		// queue is full
 		else if (queue.size() == DEPTH )begin
-			$display("virajk@ buffer_clk=%d, q_clk=%d", buffer_q[$].CPU_clock_count, q_clock_count);
-			if (buffer_q[$].CPU_clock_count == q_clock_count)
+			if (buffer_q[$].CPU_clock_count == q_clock_count) begin
 				$display("%t :  QUEUE_FULL : Request cannot be statisfied!!! Queue is full",$time);
+				$display("#                                      dropped operation :'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}'",
+					buffer_q[$].CPU_clock_count, buffer_q[$].opcode, buffer_q[$].address, buffer_q[$].life);
+				buffer_q.pop_back();
+			end
 
 			full <= 1'b1;
 			insert_flag <= 0;
