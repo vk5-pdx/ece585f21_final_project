@@ -48,9 +48,9 @@ typedef struct packed {
 } parser_out_struct;
 
 parameter BG_OFFSET = 6;
-parameter BANK_OFFSET = 6;
-parameter COLUMN_OFFSET = 6;
-parameter ROW_OFFSET = 6;
+parameter BANK_OFFSET = 8;
+parameter COLUMN_OFFSET = 10;
+parameter ROW_OFFSET = 18;
 
 parameter [ADDRESS_WIDTH-1:0] bank_group_mask = ( {2{1'b1}} << BG_OFFSET );
 parameter [ADDRESS_WIDTH-1:0] bank_mask       = ( {2{1'b1}} << BANK_OFFSET );
