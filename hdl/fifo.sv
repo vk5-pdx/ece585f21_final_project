@@ -155,6 +155,16 @@ always_ff@(posedge CPU_clock) begin
 						$time, queue[i].CPU_clock_count, queue[i].opcode, queue[i].address, queue[i].life);
 
 
+				// determining bank group, bank, column, row
+				$display("%t :             : bank group=%0d, bank=%0d, column=%0d, row=%0d"
+					,$time
+					,((bank_group_mask & queue[i].address) >> BG_OFFSET)
+					,((bank_mask & queue[i].address) >> BANK_OFFSET)
+					,((column_mask & queue[i].address) >> COLUMN_OFFSET)
+					,((row_mask & queue[i].address) >> ROW_OFFSET)
+					);
+
+
 				fifo_output <= queue[i];
 				queue.delete(i);
 

@@ -47,5 +47,15 @@ typedef struct packed {
 
 } parser_out_struct;
 
+parameter BG_OFFSET = 6;
+parameter BANK_OFFSET = 6;
+parameter COLUMN_OFFSET = 6;
+parameter ROW_OFFSET = 6;
+
+parameter [ADDRESS_WIDTH-1:0] bank_group_mask = ( {2{1'b1}} << BG_OFFSET );
+parameter [ADDRESS_WIDTH-1:0] bank_mask       = ( {2{1'b1}} << BANK_OFFSET );
+parameter [ADDRESS_WIDTH-1:0] column_mask     = ( {8{1'b1}} << COLUMN_OFFSET );
+parameter [ADDRESS_WIDTH-1:0] row_mask        = ( {10{1'b1}} << ROW_OFFSET );
+
 
 endpackage : global_defs
