@@ -16,6 +16,7 @@
 
 package global_defs;
 
+parameter DEPTH = 16;
 parameter ADDRESS_WIDTH = 32;
 
 // 3 possible opcodes present in file + NOP extra
@@ -35,16 +36,16 @@ typedef enum logic[1:0] {
 	             // otherwise wait in this state and keep counting
 } parser_states_t;
 
-
+// connections between parser and fifo
 typedef struct packed {
 
-logic [31:0] CPU_clock_count;
-parsed_op_t opcode;
-logic [ADDRESS_WIDTH-1 : 0] address;
-logic op_ready_s;
-bit [6:0] life;
+	logic       [31:0]                CPU_clock_count;
+	parsed_op_t                       opcode;
+	logic       [ADDRESS_WIDTH-1 : 0] address;
+	logic                             op_ready_s;
+	bit         [6:0]                 life;
 
-}parser_out_struct;
+} parser_out_struct;
 
 
 endpackage : global_defs
