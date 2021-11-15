@@ -33,50 +33,61 @@ int unsigned trace_file, scan_file;
 string trace_filename;
 
 // variables to store input from trace file
-logic                    [31:0] parsed_clock ;
+longint unsigned                parsed_clock ;
 parsed_op_t                     parsed_op = NOP;
 logic       [ADDRESS_WIDTH-1:0] parsed_address ;
 
+parser_out_struct buffer_q_parse[$];
 
 
 
-
-always_ff@(posedge CPU_clock ) begin
-
-	if (!rst_n) begin
-		parser_output.CPU_clock_count <= 0; // clock count to 0 under reset to restart all
-		                                    // parsing on demand
-											// on reset, reloading the trace file by opening and closing it,
-		$fclose(trace_file);                // this is done to start scanning lines from the start again
-		parser_output.op_ready_s <= 1'b0;
+initial begin
+	int unsigned counter = 0;
+	int j;
+	int flag_rep;
+	$fclose(trace_file);                // this is done to start scanning lines from the start again
 
 		if (!$value$plusargs("tracefile=%s", trace_filename)) begin
 			trace_filename = {getenv("PWD"), "/../trace_file.txt"};
 			$display("No trace file provided in argument. eg. +tracefile=<full_path_to_file>");
 			$display("taking trace file as default (%s) provided in repository", trace_filename);
 		end
-		trace_file <= $fopen(trace_filename, "r");
+		trace_file = $fopen(trace_filename, "r");
+	while($fscanf(trace_file, "%d %d 0x%h\n", parsed_clock, parsed_op, parsed_address) != -1) begin
+			flag_rep = 0;
+			for( j = 0; j < buffer_q_parse.size(); j++)
+			begin
+				if(buffer_q_parse[j].CPU_clock_count == parsed_clock) begin
+					flag_rep = 1;
+					break;
+				end
+				else
+					flag_rep = 0;
+			end
+			if(flag_rep == 0) begin
+				buffer_q_parse[counter].CPU_clock_count = parsed_clock;
+				buffer_q_parse[counter].opcode = parsed_op;
+				buffer_q_parse[counter].address = parsed_address;
+				buffer_q_parse[counter].op_ready_s = 1'b1;
+				buffer_q_parse[counter].life = '0;
+				if ($test$plusargs("debug")) $display("Unique entry %d %d %d 0x%h\n",counter,parsed_clock, parsed_op, parsed_address);
+				counter++;
+			end
+			else
+				counter = counter;
+		end
+end
+always_ff@(posedge CPU_clock ) begin
+
+	if (!rst_n) begin
+		parser_output.CPU_clock_count <= 0; // clock count to 0 under reset to restart all
+		                                    // parsing on demand
+											// on reset, reloading the trace file by opening and closing it,
+		parser_output.op_ready_s <= 1'b0;
 
 	end else begin
 
-		scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
-			parser_output.op_ready_s = 1'b1;
-			parser_output.CPU_clock_count <= parsed_clock;
-			parser_output.opcode <= parsed_op;
-			parser_output.address <= parsed_address;
-			parser_output.life <= '0;
-
-		if(scan_file == 0)
-		begin
-			$display("Invalid trace_file entry\n");
-			$finish;
-		end
-
-		//op_ready_s set to 1 after the end of file so that the last line is not parsed again or more times.
-		if (scan_file =='1) begin
-			parser_output.op_ready_s <= 1'b0;
-		end
-
+		parser_output <= buffer_q_parse.pop_front();
 	end
 end
 

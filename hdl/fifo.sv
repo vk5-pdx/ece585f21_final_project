@@ -25,12 +25,12 @@ output parser_out_struct queue [$: DEPTH-1];
 output logic insert_flag, exit_flag;
 
 //debugging variables
-logic [31:0] q_clock_count;
+longint unsigned q_clock_count = 0;
 integer unsigned i;
 parser_out_struct buffer_q[$];
 
 // getting the data to a temp queue
-always_ff@(posedge CPU_clock) begin
+always_ff@(posedge CPU_clock or negedge rst_n) begin
 	if(!rst_n) begin
 		buffer_q.delete();
 	end
@@ -48,37 +48,44 @@ always_ff@(posedge CPU_clock) begin
 
 	else begin
 		q_clock_count++;
-		
 		//When queue empty
 		if ( (queue.size() == 0) ) begin
 			full <= 1'b0;
 			empty <= 1'b1;
-
 			if( buffer_q[$].op_ready_s === 1'b1 ) begin
-				q_clock_count <= buffer_q[$].CPU_clock_count;		//advancing time
-				$display("Time:%t\tMay advance time since queue is empty",$time);
-				queue.push_front(buffer_q[$]);
-				$display("Time:%0t\tElement_inserted:%p",$time,buffer_q[$]);
-				buffer_q.pop_back();
-				insert_flag <= 1;
+				if((buffer_q[$].CPU_clock_count == q_clock_count) || (buffer_q[$].CPU_clock_count == 0) || (buffer_q[$].CPU_clock_count == 1)) begin
+					q_clock_count <= buffer_q[$].CPU_clock_count;		//advancing time
+					$display("Time:%t\tMay advance time since queue is empty",$time);
+					queue.push_front(buffer_q[$]);
+					$display("Time:%0t\tElement_inserted:%p",$time,buffer_q[$]);
+					buffer_q.pop_back();
+					insert_flag <= 1;
+				end
+				else if(buffer_q[$].CPU_clock_count <= q_clock_count) begin
+					$display("Time:%t\tCannot service this clock request, it has passed for clk count %d",$time,buffer_q[$].CPU_clock_count);
+					insert_flag <= 0;
+					buffer_q.pop_back();
+				end
+				else if(buffer_q[$].CPU_clock_count > q_clock_count) begin
+					q_clock_count <= buffer_q[$].CPU_clock_count;		//advancing time
+					$display("Time:%t\tMay advance time since queue is empty - long jump",$time);
+					queue.push_front(buffer_q[$]);
+					$display("Time:%0t\tElement_inserted:%p",$time,buffer_q[$]);
+					buffer_q.pop_back();
+					insert_flag <= 1;
+				end
+				else
+					insert_flag <= 0;
 			end
 			else
 				insert_flag <= 0;
 		end
-		//concurrent read write
-		else if (buffer_q[$].CPU_clock_count == q_clock_count ) begin
-			queue.push_front(buffer_q[$]);
-			$display("Time:%0t\tElement_inserted:%p",$time,buffer_q[$]);
-			buffer_q.pop_back();
-			insert_flag <= 1;
-		end
-		//when queue is not empty
 		else if( queue.size() > 0 && queue.size < DEPTH   ) begin
 			full <= 1'b0;
 			empty <= 1'b0;
 			if(buffer_q[$].CPU_clock_count == q_clock_count ) begin
 				queue.push_front(buffer_q[$]);
-				$display("Time:%0t\tElement_inserted:%p",$time,buffer_q[$]);
+				$display("Time:%0t\tElement_inserted that:%p",$time,buffer_q[$]);
 				buffer_q.pop_back();
 				insert_flag <= 1;
 				end
@@ -92,6 +99,15 @@ always_ff@(posedge CPU_clock) begin
 			$display("Time: %0t\tRequest cannot be statisfied!!! Queue is full",$time);
 			insert_flag <= 0;
 		
+		end
+		//when queue is not empty
+		else if (buffer_q[$].CPU_clock_count == q_clock_count ) begin
+			queue.push_front(buffer_q[$]);
+			$display("Time:%0t\tElement_inserted this:%p",$time,buffer_q[$]);
+			buffer_q.pop_back();
+			insert_flag <= 1;
+			full <= 1'b0;
+			empty <= 1'b0;
 		end
 		else
 			insert_flag <= 0;
@@ -112,21 +128,20 @@ end
 //popping out the old elements(aged 100)
 always_ff@(posedge CPU_clock) begin
 	exit_flag<=0;
-		for ( i=0; i < queue.size(); i++) begin
-			if(queue[i].life == 100) begin
-				$display("Time:%t\tThe element:%p was aged 100 and popped",$time,queue[i]);
-				fifo_output <= queue[i];
-				queue.delete(i);
-				$display("Time:%t\tThe remaining elements of queue are:%p",$time,queue);
-				exit_flag <=1;
-			end
-			else
-			begin
-				exit_flag <= 0;
-				fifo_output <= '0;
-			end
+	for ( i=0; i < queue.size(); i++) begin
+		if(queue[i].life == 100) begin
+			$display("Time:%t\tThe element:%p was aged 100 and popped",$time,queue[i]);
+			fifo_output <= queue[i];
+			queue.delete(i);
+			$display("Time:%t\tThe remaining elements of queue are:%p",$time,queue);
+			exit_flag <=1;
 		end
-	
-	end	
+		else
+		begin
+			exit_flag <= 0;
+			fifo_output <= '0;
+		end
+	end
+end
 
 endmodule

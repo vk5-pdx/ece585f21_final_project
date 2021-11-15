@@ -17,7 +17,7 @@ module parser_tb();
 	//naming variables for the design
 	parameter DEPTH = 16;
 	parameter ADDRESS_WIDTH = 32;
-	logic                       CPU_clock, rst_n;
+	logic CPU_clock, rst_n;
 	parser_out_struct parser_output;
 	parser_out_struct fifo_input,fifo_output;
 	logic full,empty,insert_flag,exit_flag;

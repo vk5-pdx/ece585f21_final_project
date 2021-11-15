@@ -38,7 +38,7 @@ typedef enum logic[1:0] {
 
 typedef struct packed {
 
-logic [31:0] CPU_clock_count;
+longint unsigned CPU_clock_count;
 parsed_op_t opcode;
 logic [ADDRESS_WIDTH-1 : 0] address;
 logic op_ready_s;
