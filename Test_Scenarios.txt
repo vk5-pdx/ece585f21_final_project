@@ -1,0 +1,6 @@
+trace_file_0 - Normal case
+trace_file_1 - Repeating old values after reading
+trace_file_2 - Continuous repetition and advance simulation
+trace_file_3 - Checking full condition
+trace_file_4 - Temporary test_case_1
+trace_file_5 - Temporary test_case_2
