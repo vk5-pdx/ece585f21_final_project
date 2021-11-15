@@ -5,7 +5,7 @@ sim_dir := $(shell pwd)
 source_dir := $(shell pwd)/../hdl/
 sv_files := $(shell find $(source_dir) -name '*.sv')
 
-trace_file = "$(sim_dir)/../trace_file.txt"
+trace_file = "$(sim_dir)/../traces/normal_trace.txt"
 top_module = "parser_tb"
 sim_opts := \
 	+debug \
