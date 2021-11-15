@@ -82,11 +82,8 @@ always_ff@(posedge CPU_clock ) begin
 	if (!rst_n) begin
 		parser_output.CPU_clock_count <= 0; // clock count to 0 under reset to restart all
 		                                    // parsing on demand
-											// on reset, reloading the trace file by opening and closing it,
 		parser_output.op_ready_s <= 1'b0;
-
 	end else begin
-
 		parser_output <= buffer_q_parse.pop_front();
 	end
 end

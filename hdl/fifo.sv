@@ -1,5 +1,5 @@
 /****************************************************************
- * fifo.sv - parses the input file and generates
+ * fifo.sv - fifo based queue
  *
  * Authors       : Viraj Khatri (vk5@pdx.edu)
  *               : Varden Prabahr (nagavar2@pdx.edu)
@@ -9,20 +9,26 @@
  *
  * Description   :
  * -----------
- * parses trace file and outputs the op signal, CPU_clock_count and address at
- * specified clock cycle and removes the element when aged 100 */
+ * Stores outputs from parser module in a fifo queue
+ * storage structure -
+ * CPU_clk_count, opcode, address, op_ready_s, life
+ ***************************************************************/
 import global_defs::*;
-module fifo(CPU_clock, rst_n, full, empty, fifo_input,fifo_output,queue,insert_flag,exit_flag);
-parameter DEPTH=16;
-//inputs
-input logic CPU_clock, rst_n;
-input parser_out_struct fifo_input;
 
-//outputs
-output parser_out_struct fifo_output;
-output logic full, empty;
-output parser_out_struct queue [$: DEPTH-1];
-output logic insert_flag, exit_flag;
+module fifo
+(
+	//inputs
+	input  logic             CPU_clock, rst_n,
+	input  parser_out_struct fifo_input,             // output from parser connected to input to queue
+
+	//outputs
+	output parser_out_struct fifo_output,            // sending memory request outbound to memory
+	output logic             full, empty,            // queue status registers
+	output logic             insert_flag, exit_flag, // new element inserted to queue, queue element removed
+
+	// debugging output
+	output parser_out_struct queue [$: DEPTH-1]      // to view queue from the testbench
+);
 
 //debugging variables
 longint unsigned q_clock_count = 0;
@@ -30,7 +36,7 @@ integer unsigned i;
 parser_out_struct buffer_q[$];
 
 // getting the data to a temp queue
-always_ff@(posedge CPU_clock or negedge rst_n) begin
+always_ff@(posedge CPU_clock) begin
 	if(!rst_n) begin
 		buffer_q.delete();
 	end
@@ -55,9 +61,17 @@ always_ff@(posedge CPU_clock) begin
 			if( buffer_q[$].op_ready_s === 1'b1 ) begin
 				if((buffer_q[$].CPU_clock_count == q_clock_count) || (buffer_q[$].CPU_clock_count == 0) || (buffer_q[$].CPU_clock_count == 1)) begin
 					q_clock_count <= buffer_q[$].CPU_clock_count;		//advancing time
-					$display("Time:%t\tMay advance time since queue is empty",$time);
+					$display("%t : QUEUE_EMPTY : May advance time since queue is empty",$time);
 					queue.push_front(buffer_q[$]);
-					$display("Time:%0t\tElement_inserted:%p",$time,buffer_q[$]);
+					// display pretty, code horrible
+					$display("%t :   INSERT    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}'",
+						$time, buffer_q[$].CPU_clock_count, buffer_q[$].opcode, buffer_q[$].address, buffer_q[$].life);
+					$display("%t :             : queue elements now :   '{",$time);
+					for (int j=0; j < queue.size(); j++) begin
+					$display("#                                                              '{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}',",
+						queue[j].CPU_clock_count, queue[j].opcode, queue[j].address, queue[j].life);
+				end
+				$display("#                                                             }'");
 					buffer_q.pop_back();
 					insert_flag <= 1;
 				end
@@ -68,10 +82,18 @@ always_ff@(posedge CPU_clock) begin
 				end
 				else if(buffer_q[$].CPU_clock_count > q_clock_count) begin
 					q_clock_count <= buffer_q[$].CPU_clock_count;		//advancing time
-					$display("Time:%t\tMay advance time since queue is empty - long jump",$time);
+					$display("%t : QUEUE_EMPTY : May advance time since queue is empty",$time);
 					queue.push_front(buffer_q[$]);
-					$display("Time:%0t\tElement_inserted:%p",$time,buffer_q[$]);
-					buffer_q.pop_back();
+					// display pretty, code horrible
+				$display("%t :   INSERT    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}'",
+						$time, buffer_q[$].CPU_clock_count, buffer_q[$].opcode, buffer_q[$].address, buffer_q[$].life);
+				$display("%t :             : queue elements now :   '{",$time);
+				for (int j=0; j < queue.size(); j++) begin
+					$display("#                                                              '{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}',",
+						queue[j].CPU_clock_count, queue[j].opcode, queue[j].address, queue[j].life);
+				end
+				$display("#                                                             }'");
+				buffer_q.pop_back();
 					insert_flag <= 1;
 				end
 				else
@@ -85,7 +107,18 @@ always_ff@(posedge CPU_clock) begin
 			empty <= 1'b0;
 			if(buffer_q[$].CPU_clock_count == q_clock_count ) begin
 				queue.push_front(buffer_q[$]);
-				$display("Time:%0t\tElement_inserted that:%p",$time,buffer_q[$]);
+
+				// display pretty, code horrible
+				$display("%t :   INSERT    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}'",
+						$time, buffer_q[$].CPU_clock_count, buffer_q[$].opcode, buffer_q[$].address, buffer_q[$].life);
+				$display("%t :             : queue elements now:'{",$time);
+				for (int j=0; j < queue.size(); j++) begin
+					$display("#                                                              '{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}',",
+						queue[j].CPU_clock_count, queue[j].opcode, queue[j].address, queue[j].life);
+				end
+				$display("#                                                             }'");
+
+
 				buffer_q.pop_back();
 				insert_flag <= 1;
 				end
@@ -93,21 +126,18 @@ always_ff@(posedge CPU_clock) begin
 				insert_flag <= 0;
 		end	
 		
+		// queue is full
 		else if (queue.size() == DEPTH )begin
 			empty <= 1'b0;
+			if (buffer_q[$].CPU_clock_count == q_clock_count) begin
+				$display("%t :  QUEUE_FULL : Request cannot be statisfied!!! Queue is full",$time);
+				$display("#                                      dropped operation :'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}'",
+					buffer_q[$].CPU_clock_count, buffer_q[$].opcode, buffer_q[$].address, buffer_q[$].life);
+				buffer_q.pop_back();
+			end
 			full <= 1'b1;
-			$display("Time: %0t\tRequest cannot be statisfied!!! Queue is full",$time);
 			insert_flag <= 0;
 		
-		end
-		//when queue is not empty
-		else if (buffer_q[$].CPU_clock_count == q_clock_count ) begin
-			queue.push_front(buffer_q[$]);
-			$display("Time:%0t\tElement_inserted this:%p",$time,buffer_q[$]);
-			buffer_q.pop_back();
-			insert_flag <= 1;
-			full <= 1'b0;
-			empty <= 1'b0;
 		end
 		else
 			insert_flag <= 0;
@@ -118,7 +148,7 @@ end
 //incrementing life of each element
 always_ff@(posedge CPU_clock) begin
 	if(queue.size() > 0) begin
-		for ( i=0; i < queue.size(); i++) begin
+		for (int i=0; i < queue.size(); i++) begin
 			queue[i].life++;
 		end
 	end	
@@ -128,13 +158,33 @@ end
 //popping out the old elements(aged 100)
 always_ff@(posedge CPU_clock) begin
 	exit_flag<=0;
-	for ( i=0; i < queue.size(); i++) begin
+	for (int i=0; i < queue.size(); i++) begin
 		if(queue[i].life == 100) begin
-			$display("Time:%t\tThe element:%p was aged 100 and popped",$time,queue[i]);
+				// display pretty, code horrible
+				$display("%t :   AGE_POP   : The element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}' was aged 100 and popped",
+						$time, queue[i].CPU_clock_count, queue[i].opcode, queue[i].address, queue[i].life);
+
+
+				// determining bank group, bank, column, row
+				$display("%t :             : bank group=%0d, bank=%0d, column=%0d, row=%0d"
+					,$time
+					,((bank_group_mask & queue[i].address) >> BG_OFFSET)
+					,((bank_mask & queue[i].address) >> BANK_OFFSET)
+					,((column_mask & queue[i].address) >> COLUMN_OFFSET)
+					,((row_mask & queue[i].address) >> ROW_OFFSET)
+					);
 			fifo_output <= queue[i];
 			queue.delete(i);
-			$display("Time:%t\tThe remaining elements of queue are:%p",$time,queue);
-			exit_flag <=1;
+				// display pretty, code horrible
+				$display("%t :             : queue elements remain:'{",$time);
+				for (int j=0; j < queue.size(); j++) begin
+					$display("#                                                              '{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}',",
+						queue[j].CPU_clock_count, queue[j].opcode, queue[j].address, queue[j].life);
+				end
+				$display("#                                                             }'");
+
+				exit_flag <=1;
+				break;
 		end
 		else
 		begin
