@@ -43,7 +43,7 @@ parser_out_struct buffer_q_parse[$];
 
 initial begin
 	int unsigned counter = 0;
-	int j;
+	int j, clock_ref;
 	int flag_rep;
 	$fclose(trace_file);                // this is done to start scanning lines from the start again
 
@@ -55,16 +55,21 @@ initial begin
 		trace_file = $fopen(trace_filename, "r");
 	while($fscanf(trace_file, "%d %d 0x%h\n", parsed_clock, parsed_op, parsed_address) != -1) begin
 			flag_rep = 0;
+			clock_ref = 0;
+			if(parsed_clock < 0)
+				clock_ref = 1;
+			else
+				clock_ref = 0;
 			for( j = 0; j < buffer_q_parse.size(); j++)
 			begin
-				if(buffer_q_parse[j].CPU_clock_count == parsed_clock) begin
+				if(buffer_q_parse[j].CPU_clock_count >= parsed_clock) begin
 					flag_rep = 1;
 					break;
 				end
 				else
 					flag_rep = 0;
 			end
-			if(flag_rep == 0) begin
+			if((flag_rep == 0) && (clock_ref == 0)) begin
 				buffer_q_parse[counter].CPU_clock_count = parsed_clock;
 				buffer_q_parse[counter].opcode = parsed_op;
 				buffer_q_parse[counter].address = parsed_address;
