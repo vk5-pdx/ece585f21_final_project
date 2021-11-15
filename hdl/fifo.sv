@@ -54,6 +54,12 @@ always_ff@(posedge CPU_clock) begin
 	else begin
 		q_clock_count++;
 		
+		if ((buffer_q[$].CPU_clock_count >> 31) == 1) begin
+			$display("%t :    ERROR    : -ve trace file clock count, discarding", $time);
+			buffer_q.pop_back();
+		end
+
+		// preventing trace file entry errors
 		if (buffer_q[0].CPU_clock_count <= buffer_q[1].CPU_clock_count) begin
 			$display("%t :    ERROR    : trace file has invalid timing, discarding 2nd entry from from offending parties", $time);
 			$display("%t :     kept    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}'",
@@ -75,7 +81,7 @@ always_ff@(posedge CPU_clock) begin
 				queue.push_front(buffer_q[$]);
 
 				// display pretty, code horrible
-				$display("%t :   INSERT    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}' was aged 100 and popped",
+				$display("%t :   INSERT    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h, life:%d}'",
 						$time, buffer_q[$].CPU_clock_count, buffer_q[$].opcode, buffer_q[$].address, buffer_q[$].life);
 				$display("%t :             : queue elements now :   '{",$time);
 				for (int j=0; j < queue.size(); j++) begin
