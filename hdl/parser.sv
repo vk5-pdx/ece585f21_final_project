@@ -63,8 +63,7 @@ initial begin : tracefile_load
 	end
 	trace_file = $fopen(trace_filename, "r");
 	if (trace_file == 0) begin
-		$display("Could not open trace_file (%s)", trace_filename);
-		$finish;
+		$fatal("Could not open trace_file (%s)", trace_filename);
 	end
 
 end : tracefile_load
@@ -73,26 +72,26 @@ end : tracefile_load
  * memory elements of FSM                  *
  * manages -                               *
  * 1. next_state -> current_state          *
- * 2. opening and closing file on reset    *
- * 3. scanning a line when state = NEW_OP  *
+ * 2. scanning a line when state = NEW_OP  *
  *******************************************/
 always_ff@(posedge clk ) begin
 
 	if (!rst_n) begin
 
-		curr_state <= NEW_OP; // on reset, reloading the trace file by opening and closing it,
-		$fclose(trace_file);  // this is done to start scanning lines from the start again
-		trace_file <= $fopen(trace_filename, "r");
+		curr_state <= WAITE;
 
 	end else begin
 
 		curr_state <= next_state;
 
 		if (next_state == NEW_OP) begin
-			scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
-			if(scan_file == 0) begin
-				$display("Invalid trace_file entry\n");
-				$finish;
+			if ($feof(trace_file)) curr_state <= WAITE;
+			else begin
+				scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
+				if(scan_file == 0) begin
+					$display("Invalid trace_file entry\n");
+					$finish;
+				end
 			end
 		end
 	end
@@ -108,7 +107,8 @@ assign out.time_cpu = parsed_clock;
 always_comb begin
 	unique case(curr_state)
 		WAITE: begin
-			out.op_ready_s = 1'b0;
+			if (pending_request) out.op_ready_s = 1'b1;
+			else out.op_ready_s = 1'b0;
 		end
 		NEW_OP : begin
 			out.op_ready_s = 1'b1;
@@ -126,7 +126,8 @@ always_comb begin
 			else next_state = WAITE;
 		end
 		NEW_OP : begin
-			next_state = WAITE;
+			if (!queue_full && !pending_request) next_state = NEW_OP;
+			else next_state = WAITE;
 		end
 	endcase
 end
