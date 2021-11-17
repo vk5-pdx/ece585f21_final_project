@@ -19,6 +19,10 @@ package global_defs;
 parameter ADDRESS_WIDTH = 32;
 parameter QUEUE_SIZE = 16;
 
+
+parameter BITS_FOR_100 = $clog2(100);
+typedef age_counter_t logic[BITS_FOR_100-1:0];
+
 // 3 possible opcodes present in file + NOP extra
 typedef enum logic[1:0] {
 	DATA_READ = 0,  // 0 = read
@@ -29,12 +33,21 @@ typedef enum logic[1:0] {
 } parsed_op_t;
 
 // parser module states
-typedef enum logic[1:0] {
-	RESET,
-	READING,     // reading from file
-	NEW_OP       // if clock count matches entry from trace file, output stuff from parser
-	             // otherwise wait in this state and keep counting
+typedef enum logic {
+	WAITE,  // waiting for empty spot in queue
+	NEW_OP, // read and outputting new operation
 } parser_states_t;
+
+// output from parser
+typedef struct packed {
+
+	logic                            op_ready_s; // strobe signal to mark new output
+	parsed_op_t                      opcode;     // opcode of operation
+	logic        [ADDRESS_WIDTH-1:0] address;    // address of operation
+	int unsigned                     time_cpu;   // cpu clock count for operation issue
+
+} parser_out_struct_t;
+
 
 endpackage : global_defs
 

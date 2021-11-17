@@ -5,12 +5,12 @@
  *               : Varden Prabahr (nagavar2@pdx.edu)
  *               : Sai Krishnan (saikris2@pdx.edu)
  *               : Chirag Chaudhari (chirpdx@pdx.edu)
- * Last Modified : 6th November, 2021
+ * Last Modified : 16th November, 2021
  *
  * Description   :
  * -----------
  * parses trace file and outputs the op signal and address at
- * specified clock cycle
+ * whenever queue is empty and no pending request is left
  ****************************************************************/
 
 import global_defs::*;
@@ -23,17 +23,16 @@ import "DPI-C" function string getenv(input string env_name);
 module parser
 (
 	// inputs
-	input  logic                           clk, rst_n,
+	input  logic               clk, rst_n,
+	input  logic               queue_full,      // flag for queue being full
+	input  logic               pending_request, // flag to denote if currently read trace-line
+	                                            // is not dealt with yet
 
 	// outputs
-	output logic                           op_ready_s,     // strobe signal, new op available to latch
-	output parsed_op_t                     opcode,         // output signal corresponding to parsed op
-	output logic       [ADDRESS_WIDTH-1:0] address,        // output address corresponding to parsed address
-	output logic                           CPU_clk,        // outputting CPU clock for other modules to use
+	output parser_out_struct_t out,
 
 	// debugging outputs
-	output parser_states_t                 state,          // debugging purposes only
-	output int unsigned                    CPU_cycle_count // counting clock to compare to parsed clock
+	output parser_states_t     state
 );
 
 // defining file handling veriables
@@ -48,82 +47,71 @@ logic       [ADDRESS_WIDTH-1:0] parsed_address = 'x;
 
 
 // internal state variables
-parser_states_t curr_state = READING, next_state;
+parser_states_t curr_state = WAITE, next_state;
 assign state = curr_state; // debug purposes
 
 // CPU clock generator, toggles on every clock, thus half-frequency
 logic half = 1'b0;
 assign CPU_clk = half;
 
+initial begin : tracefile_load
+
+	if (!$value$plusargs("tracefile=%s", trace_filename)) begin
+		trace_filename = {getenv("PWD"), "/../traces/normal_trace.txt"};
+		$display("No trace file provided in argument. eg. +tracefile=<full_path_to_file>");
+		$display("taking trace file as default (%s) provided in repository", trace_filename);
+	end
+	trace_file = $fopen(trace_filename, "r");
+	if (trace_file == 0) begin
+		$display("Could not open trace_file (%s)", trace_filename);
+		$finish;
+	end
+
+end : tracefile_load
+
 /*******************************************
  * memory elements of FSM                  *
  * manages -                               *
  * 1. next_state -> current_state          *
  * 2. opening and closing file on reset    *
- * 3. scanning a line when state = READING *
+ * 3. scanning a line when state = NEW_OP  *
  *******************************************/
 always_ff@(posedge clk ) begin
 
 	if (!rst_n) begin
-		CPU_cycle_count <= 0; // clock count to 0 under reset to restart all
-		                      // parsing on demand
-		half <= 1'b0;
-		curr_state <= RESET;  // on reset, reloading the trace file by opening and closing it,
-		$fclose(trace_file);  // this is done to start scanning lines from the start again
 
-		if (!$value$plusargs("tracefile=%s", trace_filename)) begin
-			trace_filename = {getenv("PWD"), "/../trace_file.txt"};
-			$display("No trace file provided in argument. eg. +tracefile=<full_path_to_file>");
-			$display("taking trace file as default (%s) provided in repository", trace_filename);
-		end
+		curr_state <= NEW_OP; // on reset, reloading the trace file by opening and closing it,
+		$fclose(trace_file);  // this is done to start scanning lines from the start again
 		trace_file <= $fopen(trace_filename, "r");
 
 	end else begin
 
-		if (half) CPU_cycle_count++; // Counter for CPU clk
-		half <= ~half;
-
 		curr_state <= next_state;
 
-		if(next_state == READING)
-		scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
-		if(scan_file == 0)
-		begin
-			$display("Invalid trace_file entry\n");
-			$finish;
+		if (next_state == NEW_OP) begin
+			scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
+			if(scan_file == 0) begin
+				$display("Invalid trace_file entry\n");
+				$finish;
+			end
 		end
 	end
 end
 
-/****************************
- *     data flow logic      *
- * modeled as mealy machine *
- ****************************/
+/*******************
+ * data flow logic *
+ *******************/
+assign out.opcode = parsed_op;
+assign out.address = parsed_address;
+assign out.time_cpu = parsed_clock;
+
 always_comb begin
 	unique case(curr_state)
-		RESET : begin
-			op_ready_s = 1'b0;
-			address = 'x;
-			opcode = NOP;
-		end
-		READING : begin
-			op_ready_s = 1'b0;
-			address = 'x;
-			opcode = NOP;
+		WAITE: begin
+			out.op_ready_s = 1'b0;
 		end
 		NEW_OP : begin
-			if (CPU_cycle_count == parsed_clock) begin
-
-				address = parsed_address;
-				opcode = parsed_op;
-				op_ready_s = 1'b1;
-
-			end
-			else begin
-				op_ready_s = 1'b0;
-				address = parsed_address;
-				opcode = parsed_op;
-			end
+			out.op_ready_s = 1'b1;
 		end
 	endcase
 end
@@ -133,13 +121,12 @@ end
  ********************/
 always_comb begin
 	unique case(curr_state)
-		RESET : next_state = READING;
-		READING :next_state = NEW_OP;
+		WAITE : begin
+			if (!queue_full && !pending_request) next_state = NEW_OP;
+			else next_state = WAITE;
+		end
 		NEW_OP : begin
-			if (CPU_cycle_count  == parsed_clock) begin
-				next_state = READING;
-			end
-			else next_state = NEW_OP;
+			next_state = WAITE;
 		end
 	endcase
 end
