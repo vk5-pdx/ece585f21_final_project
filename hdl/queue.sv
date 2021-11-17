@@ -40,19 +40,18 @@ assign queue_time = curr_time;
 /***************************
  * flags to send to parser *
  ***************************/
-always_comb begin : parser_flags
-	//if (in.op_ready_s == 1'b1) pending_request = 1'b1;
-	//else pending_request = 1'b0;
-	//pending_request = 1'b0;
-
+always_comb begin : queue_flag
 	if (queue.size() == QUEUE_SIZE) queue_full = 1'b1;
 	else queue_full = 1'b0;
-end : parser_flags
+end : queue_flag
 
-/****************************
- * taking input from parser *
- ****************************/
+/******************
+ * dataflow block *
+ ******************/
 always_ff@(posedge clk or negedge rst_n) begin : parser_in
+	if ($test$plusargs("per_clock"))
+		$display("%t :    START    : full,pend=%b,%b  curr_time=%0d : in=%p", $time, queue_full, pending_request, curr_time, in);
+
 	if (!rst_n) begin
 		queue.delete();
 		curr_time <= 0;
@@ -60,6 +59,38 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 	end
 
 	else begin
+
+		// output from queue
+		if (age[$] == 100) begin
+			out <= queue[$];
+
+			if ($test$plusargs("debug")) begin
+				$display("%t :  AGE POP    : element:'{time_cpu:%0t, opcode:%p, address:0x%h}' : curr_time=%0d",
+							 $time,
+							 queue[$].time_cpu,
+							 queue[$].opcode,
+							 queue[$].address,
+							 curr_time);
+			end
+
+			queue.pop_back();
+			age.pop_back();
+
+			if ($test$plusargs("debug")) begin
+				$display("%t :             : queue has %0d elements now :   '{", $time, queue.size());
+				for (int j=0; j < queue.size(); j++) begin
+					$display("#                                                              '{time_cpu:%0t, opcode:%p, address:0x%h}' '{age:%d}',",
+								  queue[j].time_cpu,
+								  queue[j].opcode,
+								  queue[j].address,
+								  age[j]);
+				end
+				$display("#                                                             }'");
+			end
+		end
+
+
+		// taking input from parser
 		if (in.op_ready_s) begin
 			if (queue.size() == 0) begin
 				curr_time <= in.time_cpu; // time skip in empty queue
@@ -73,23 +104,21 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 
 
 				if ($test$plusargs("debug")) begin
-					$display("%t :   INSERT    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h}' : curr_time=%0d",
+					$display("%t :   INSERT    : element:'{time_cpu:%0t, opcode:%p, address:0x%h}' : curr_time=%0d",
 					          $time,
 					          in.time_cpu,
 					          in.opcode,
 					          in.address,
 					          curr_time);
-					$display("%t : VIRAJK TEST : full,pend=%b,%b : in=%p", $time, queue_full, pending_request, in);
 					$display("%t :             : queue has %0d elements now :   '{",$time, queue.size());
 					for (int j=0; j < queue.size(); j++) begin
-						$display("#                                                              '{CPU_clk:%0t, opcode:%p, address:0x%h}' '{age:%d}',",
+						$display("#                                                              '{time_cpu:%0t, opcode:%p, address:0x%h}' '{age:%d}',",
 						           queue[j].time_cpu,
 						           queue[j].opcode,
 						           queue[j].address,
 						           age[j]);
 					end
 					$display("#                                                             }'");
-					$display("%t : VIRAJK TEST : full,pend=%b,%b : in=%p", $time, queue_full, pending_request, in);
 				end
 			end else begin
 				pending_request <= 1'b1;
@@ -107,40 +136,6 @@ always_ff@(posedge clk) begin : queue_age
 		age[i]++;
 	end
 end : queue_age
-
-/*********************
- * output from queue *
- *********************/
-always_ff@(posedge clk) begin : age_pop
-	if (age[$] == 100) begin
-		out <= queue[$];
-
-		if ($test$plusargs("debug")) begin
-			$display("%t :  AGE POP    : element:'{CPU_clk:%0t, opcode:%p, address:0x%h}' : curr_time=%0d",
-			          $time,
-			          queue[$].time_cpu,
-			          queue[$].opcode,
-			          queue[$].address,
-			          curr_time);
-			$display("%t : VIRAJK TEST : full,pend=%b,%b : in=%p", $time, queue_full, pending_request, in);
-		end
-
-		queue.pop_back();
-		age.pop_back();
-
-		if ($test$plusargs("debug")) begin
-			$display("%t :             : queue has %0d elements now :   '{", $time, queue.size());
-			for (int j=0; j < queue.size(); j++) begin
-				$display("#                                                              '{CPU_clk:%0t, opcode:%p, address:0x%h}' '{age:%d}',",
-				           queue[j].time_cpu,
-				           queue[j].opcode,
-				           queue[j].address,
-				           age[j]);
-			end
-			$display("#                                                             }'");
-		end
-	end
-end : age_pop
 
 
 endmodule : queue

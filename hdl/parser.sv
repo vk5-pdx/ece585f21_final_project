@@ -24,6 +24,7 @@ module parser
 (
 	// inputs
 	input  logic               clk, rst_n,
+	input  int_t               queue_time,      // to not read when flags not updated yet
 	input  logic               queue_full,      // flag for queue being full
 	input  logic               pending_request, // flag to denote if currently read trace-line
 	                                            // is not dealt with yet
@@ -41,7 +42,7 @@ string trace_filename;
 
 
 // variables to store input from trace file
-logic                    [31:0] parsed_clock = 'x;
+logic                    [31:0] parsed_clock = '0;
 parsed_op_t                     parsed_op = NOP;
 logic       [ADDRESS_WIDTH-1:0] parsed_address = 'x;
 
@@ -49,10 +50,6 @@ logic       [ADDRESS_WIDTH-1:0] parsed_address = 'x;
 // internal state variables
 parser_states_t curr_state = WAITE, next_state;
 assign state = curr_state; // debug purposes
-
-// CPU clock generator, toggles on every clock, thus half-frequency
-logic half = 1'b0;
-assign CPU_clk = half;
 
 initial begin : tracefile_load
 
@@ -84,7 +81,7 @@ always_ff@(posedge clk ) begin
 
 		curr_state <= next_state;
 
-		if (next_state == NEW_OP) begin
+		if (next_state == NEW_OP && queue_time >= parsed_clock) begin
 			if ($feof(trace_file)) curr_state <= WAITE;
 			else begin
 				scan_file = $fscanf(trace_file, "%d %d %h\n", parsed_clock, parsed_op, parsed_address);
@@ -122,7 +119,7 @@ end
 always_comb begin
 	unique case(curr_state)
 		WAITE : begin
-			if (!queue_full && !pending_request) next_state = NEW_OP;
+			if (!pending_request) next_state = NEW_OP;
 			else next_state = WAITE;
 		end
 		NEW_OP : begin

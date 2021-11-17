@@ -21,25 +21,25 @@ VLOG: VLIB
 
 all: VLOG
 	cd $(sim_dir)
-	vsim -c -do "run -all" +nowarn3691 \
+	vsim -c -do "run -all ; q" +nowarn3691 \
 		work.$(top_module) \
 		$(sim_opts)
 
 parser: VLOG
 	cd $(sim_dir)
-		vsim -c -do "run -all" +nowarn3691 \
+		vsim -c -do "run -all ; q" +nowarn3691 \
 		work.parser_tb \
 		$(sim_opts)
 
 queue: VLOG
 	cd $(sim_dir)
-		vsim -c -do "run -all" +nowarn3691 \
+		vsim -c -do "run -all ; q" +nowarn3691 \
 		work.queue_tb \
 		$(sim_opts)
 
 gui: VLOG
 	cd $(sim_dir)
-	vsim -voptargs=+acc -do "run -all" +nowarn3691 \
+	vsim -voptargs=+acc -do "run -all ; q" +nowarn3691 \
 		work.$(top_module) \
 		$(sim_opts)
 

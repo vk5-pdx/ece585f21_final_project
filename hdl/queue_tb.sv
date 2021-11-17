@@ -20,6 +20,7 @@ logic clk, rst_n;
  * parser *
  **********/
 // connections
+int_t               queue_time;      // display what time is queue currently at
 logic               queue_full;      // flag for queue being full
 logic               pending_request; // flag to denote if currently read trace-line
                                      // is not dealt with yet
@@ -31,6 +32,7 @@ parser_states_t     parser_state;
 // instantiation
 parser parser_inst(.clk, .rst_n,
                    .pending_request,
+                   .queue_time,
                    .queue_full,
 						 .out(parser_out),
 						 .state(parser_state)
@@ -44,7 +46,6 @@ parser parser_inst(.clk, .rst_n,
 parser_out_struct_t queue_out;             // output to next module (memory controller / DRAM?)
 parser_out_struct_t queue[$:QUEUE_SIZE-1]; // queue to store many memory requests
 age_counter_t       age[$:QUEUE_SIZE-1];
-int_t               queue_time;            // display what time is queue currently at
 
 // instantiation
 queue queue_inst(.clk, .rst_n,
