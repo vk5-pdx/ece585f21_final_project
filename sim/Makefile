@@ -39,7 +39,7 @@ queue: VLOG
 
 gui: VLOG
 	cd $(sim_dir)
-	vsim -voptargs=+acc -do "run -all ; q" +nowarn3691 \
+	vsim -voptargs=+acc -do "run -all" +nowarn3691 \ # TODO : add waveform addition commands before "run -all" to display correctly
 		work.$(top_module) \
 		$(sim_opts)
 
