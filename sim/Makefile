@@ -5,11 +5,13 @@ sim_dir := $(shell pwd)
 source_dir := $(shell pwd)/../hdl/
 sv_files := $(shell find $(source_dir) -name '*.sv')
 
-trace_file = "$(sim_dir)/../traces/cp3_trace.txt"
+trace_file = "$(sim_dir)/../traces/trace.txt"
+
 top_module = "queue_tb"
 sim_opts := \
 	+debug \
 	+tracefile=$(trace_file)
+
 
 VLIB:
 	cd $(sim_dir)

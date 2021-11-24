@@ -16,7 +16,7 @@
 
 package global_defs;
 
-parameter ADDRESS_WIDTH = 32;
+parameter ADDRESS_WIDTH = 33;
 parameter QUEUE_SIZE = 16;
 
 typedef logic[31:0] int_t;
@@ -49,6 +49,15 @@ typedef struct packed {
 
 } parser_out_struct_t;
 
+parameter BG_OFFSET = 6;
+parameter BANK_OFFSET = 8;
+parameter COLUMN_OFFSET = 10;
+parameter ROW_OFFSET = 18;
+
+parameter [ADDRESS_WIDTH-1:0] bank_group_mask = ( {2{1'b1}} << BG_OFFSET );
+parameter [ADDRESS_WIDTH-1:0] bank_mask       = ( {2{1'b1}} << BANK_OFFSET );
+parameter [ADDRESS_WIDTH-1:0] column_mask     = ( {8{1'b1}} << COLUMN_OFFSET );
+parameter [ADDRESS_WIDTH-1:0] row_mask        = ( {15{1'b1}} << ROW_OFFSET );
 
 endpackage : global_defs
 
