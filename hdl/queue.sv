@@ -49,23 +49,21 @@ end : queue_flag
  * print on queue output *
  *************************/
 function automatic queue_output_display(parser_out_struct_t out);
-	if ($test$plusargs("debug")) begin
-		$display("%t :  AGE POP    : element:'{time_cpu:%0t, opcode:%p, address:0x%h}' : curr_time=%0d",
-					 $time,
-					 out.time_cpu,
-					 out.opcode,
-					 out.address,
-					 curr_time);
+	$display("%t :  AGE POP    : element:'{time_cpu:%0t, opcode:%p, address:0x%h}' : curr_time=%0d",
+				 $time,
+				 out.time_cpu,
+				 out.opcode,
+				 out.address,
+				 curr_time);
 
-		// determining bank group, bank, column, row
-		$display("%t :             : bank group=%0d, bank=%0d, column=%0d, row=%0d",
-		          $time,
-		          ((bank_group_mask & out.address) >> BG_OFFSET),
-		          ((bank_mask       & out.address) >> BANK_OFFSET),
-		          ((column_mask     & out.address) >> COLUMN_OFFSET),
-		          ((row_mask        & out.address) >> ROW_OFFSET));
+	// determining bank group, bank, column, row
+	$display("%t :             : bank group=%0d, bank=%0d, column=%0d, row=%0d",
+	          $time,
+	          ((bank_group_mask & out.address) >> BG_OFFSET),
+	          ((bank_mask       & out.address) >> BANK_OFFSET),
+	          ((column_mask     & out.address) >> COLUMN_OFFSET),
+	          ((row_mask        & out.address) >> ROW_OFFSET));
 
-	end
 endfunction
 
 /******************
@@ -87,7 +85,8 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 		if (age[$] == 100) begin
 			out <= queue[$];
 
-			queue_output_display(queue[$]); // age popping last element, so display that
+			if ($test$plusargs("debug"))
+				queue_output_display(queue[$]); // age popping last element, so display that
 			queue.pop_back();
 			age.pop_back();
 
