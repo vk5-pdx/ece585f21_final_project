@@ -59,5 +59,25 @@ parameter [ADDRESS_WIDTH-1:0] bank_mask       = ( {2{1'b1}} << BANK_OFFSET );
 parameter [ADDRESS_WIDTH-1:0] column_mask     = ( {8{1'b1}} << COLUMN_OFFSET );
 parameter [ADDRESS_WIDTH-1:0] row_mask        = ( {15{1'b1}} << ROW_OFFSET );
 
+// DRAM timing constraints in CPU clock cycles
+// CPU clock - 3.2GHz, DRAM clock - 1.6GHz
+parameter T_RC    = 152;      // 76 DRAM Cycles
+parameter T_RAS   = 104;      // 52
+parameter T_RRD_L = 12;       // 6
+parameter T_RRD_S = 8;        // 4
+parameter T_RP    = 48;       // 24
+parameter T_RFC   = 1120;     // 350ns for a 312.5ps CPU clock period
+parameter T_CWD   = 40;       // 20
+parameter T_CAS   = 48;       // 24
+parameter T_RCD   = 48;       // 24
+parameter T_WR    = 40;       // 20
+parameter T_RTP   = 24;       // 12
+parameter T_CCD_L = 16;       // 8
+parameter T_CCD_S = 8;        // 4
+parameter T_BURST = 8;        // 4
+parameter T_WTR_L = 24;       // 12
+parameter T_WTR_S = 8;        // 4
+parameter T_REFI  = 24960000; // 7.8us for 312.5ps CPU clock period
+
 endpackage : global_defs
 
