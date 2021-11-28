@@ -37,6 +37,9 @@ module queue
 int_t curr_time;
 assign queue_time = curr_time;
 
+logic half_clk, out_ready;
+parser_out_struct_t out_buffer;
+
 /***************************
  * flags to send to parser *
  ***************************/
@@ -49,7 +52,7 @@ end : queue_flag
  * print on queue output *
  *************************/
 function automatic queue_output_display(parser_out_struct_t out);
-	$display("%t :  AGE POP    : element:'{time_cpu:%0t, opcode:%p, address:0x%h}' : curr_time=%0d",
+	$display("%t : OUTPUT DRAM : element:'{time_cpu:%0t, opcode:%p, address:0x%h}' : curr_time=%0d",
 				 $time,
 				 out.time_cpu,
 				 out.opcode,
@@ -82,25 +85,13 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 	else begin
 
 		// output from queue
-		if (age[$] == 100) begin
-			out <= queue[$];
+		// TODO : 2-d array to keep track of status of all rows on DRAM
+		// use that array to determine ACT/READ/WRITE statuses
 
-			if ($test$plusargs("debug"))
-				queue_output_display(queue[$]); // age popping last element, so display that
-			queue.pop_back();
-			age.pop_back();
-
-			if ($test$plusargs("debug")) begin
-				$display("%t :             : queue has %0d elements now :   '{", $time, queue.size());
-				for (int j=0; j < queue.size(); j++) begin
-					$display("#                                                              '{time_cpu:%0t, opcode:%p, address:0x%h}' '{age:%d}',",
-								  queue[j].time_cpu,
-								  queue[j].opcode,
-								  queue[j].address,
-								  age[j]);
-				end
-				$display("#                                                             }'");
-			end
+		// forcing age pop on 100+ CPU_clock old entries
+		if (age[$] >= 100) begin
+			out_buffer <= queue[$];
+			out_ready <= 1;
 		end
 
 
@@ -151,5 +142,37 @@ always_ff@(posedge clk) begin : queue_age
 	end
 end : queue_age
 
+/*************************************************
+ * Outputting requests to DRAM on half frequency *
+ *************************************************/
+always_ff@(posedge clk or negedge rst_n) begin
+	if (!rst_n) half_clk = 0;
+	else half_clk <= ~half_clk;
+end
+
+always_ff@(posedge half_clk) begin
+	if (out_ready) begin
+		out <= out_buffer;
+		out_ready <= 0;
+
+		if ($test$plusargs("debug"))
+			queue_output_display(queue[$]); // age popping last element, so display that
+
+		queue.pop_back();
+		age.pop_back();
+
+		if ($test$plusargs("debug")) begin
+			$display("%t :             : queue has %0d elements now :   '{", $time, queue.size());
+			for (int j=0; j < queue.size(); j++) begin
+				$display("#                                                              '{time_cpu:%0t, opcode:%p, address:0x%h}' '{age:%d}',",
+							  queue[j].time_cpu,
+							  queue[j].opcode,
+							  queue[j].address,
+							  age[j]);
+			end
+			$display("#                                                             }'");
+		end
+	end
+end
 
 endmodule : queue
