@@ -85,7 +85,7 @@ always_ff@(posedge clk ) begin
 			if ($feof(trace_file)) curr_state <= WAITE;
 			else begin
 				scan_file = $fscanf(trace_file, "%d %d %h", parsed_clock, parsed_op, parsed_address);
-				if(scan_file != 3) begin
+				if(scan_file == 0) begin
 					$display("Invalid trace_file entry, could not read 3 items from tracefile\n");
 					$finish;
 				end

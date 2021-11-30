@@ -20,25 +20,31 @@ module queue
 	input  logic               clk, rst_n,
 
 	// inputs from parser
-	input  parser_out_struct_t in,                    // has op_ready_s, opcode, address and time_cpu
+	input  parser_out_struct_t in,              // has op_ready_s, opcode, address and time_cpu
 
 	// outputs to parser
-	output logic               pending_request,       // flag - request is not acknowledged yet
-	output logic               queue_full,            // flag - queue is full
+	output logic               pending_request, // flag - request is not acknowledged yet
+	output logic               queue_full,      // flag - queue is full
 
 	// outputs
-	output parser_out_struct_t out,                   // output to next module (memory controller / DRAM?)
-	output parser_out_struct_t queue[$:QUEUE_SIZE-1], // queue to store many memory requests
-	output age_counter_t       age[$:QUEUE_SIZE-1],
-	output int_t               queue_time             // display what time is queue currently at (int)
+	output queue_output_t      out,             // contains the command and address to which command is issued
+	output int_t               queue_time       // output back to parser to solve edge-cases
 );
 
 
 int_t curr_time;
 assign queue_time = curr_time;
 
-logic half_clk, out_ready;
+wire output_allowed;
+logic half_clk;
 parser_out_struct_t out_buffer;
+logic [$clog2(QUEUE_SIZE)-1:0] out_queue_index; // queue index of currently outgoing item
+
+age_counter_t age[$:QUEUE_SIZE-1];
+parser_out_struct_t queue[$:QUEUE_SIZE-1]; // storage
+
+// array for tracking bank statuses
+bank_status_t bank_status[16];
 
 /***************************
  * flags to send to parser *
@@ -51,21 +57,21 @@ end : queue_flag
 /*************************
  * print on queue output *
  *************************/
-function automatic queue_output_display(parser_out_struct_t out);
+function automatic queue_output_display(parser_out_struct_t queue_item);
 	$display("%t : OUTPUT DRAM : element:'{time_cpu:%0t, opcode:%p, address:0x%h}' : curr_time=%0d",
 				 $time,
-				 out.time_cpu,
-				 out.opcode,
-				 out.address,
+				 queue_item.time_cpu,
+				 queue_item.opcode,
+				 queue_item.address,
 				 curr_time);
 
 	// determining bank group, bank, column, row
 	$display("%t :             : bank group=%0d, bank=%0d, column=%0d, row=%0d",
 	          $time,
-	          ((bank_group_mask & out.address) >> BG_OFFSET),
-	          ((bank_mask       & out.address) >> BANK_OFFSET),
-	          ((column_mask     & out.address) >> COLUMN_OFFSET),
-	          ((row_mask        & out.address) >> ROW_OFFSET));
+	          ((bank_group_mask & queue_item.address) >> BG_OFFSET),
+	          ((bank_mask       & queue_item.address) >> BANK_OFFSET),
+	          ((column_mask     & queue_item.address) >> COLUMN_OFFSET),
+	          ((row_mask        & queue_item.address) >> ROW_OFFSET));
 
 endfunction
 
@@ -85,15 +91,7 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 	else begin
 
 		// output from queue
-		// TODO : 2-d array to keep track of status of all rows on DRAM
-		// use that array to determine ACT/READ/WRITE statuses
-
-		// forcing age pop on 100+ CPU_clock old entries
-		if (age[$] >= 100) begin
-			out_buffer <= queue[$];
-			out_ready <= 1;
-		end
-
+		decide_output_buffer();
 
 		// taking input from parser
 		if (in.op_ready_s) begin
@@ -142,6 +140,50 @@ always_ff@(posedge clk) begin : queue_age
 	end
 end : queue_age
 
+/**********************************
+ * Issuing refresh after T_REFI   *
+ * And blocking outputs for T_RFC *
+ **********************************/
+parameter REFI_COUNTER_SIZE = $clog2(T_REFI);
+logic [REFI_COUNTER_SIZE-1:0] refi_counter;
+parameter RFC_COUNTER_SIZE = $clog2(T_RFC);
+logic [RFC_COUNTER_SIZE-1:0] rfc_counter;
+
+logic out_allowed_refresh;
+// this should overwrite other signals to stop output on low only
+// as if refresh command is issued, DRAM cannot be accessed
+assign (strong0, weak1) output_allowed = out_allowed_refresh;
+
+always_ff@(posedge clk or negedge rst_n) begin
+	if (!rst_n) begin
+		refi_counter <= T_REFI;
+		rfc_counter <= T_RFC;
+	end
+
+	else begin
+		if (refi_counter == '0) begin // t_refi is done, issue a refresh command now
+			if (rfc_counter == '0) begin
+				if ($test$plusargs("debug"))
+					$display("%t :  REFRESHED  : outgoing DRAM commands resumed : curr_time = %0d", curr_time);
+				refi_counter <= T_REFI;
+				rfc_counter <= T_RFC;
+				out_allowed_refresh <= 1;
+			end
+			else begin
+				if ($test$plusargs("debug") && rfc_counter == T_RFC)
+					$display("%t :   REFRESH   : outgoing DRAM commands halted : curr_time = %0d", curr_time);
+				out_allowed_refresh <= 0;
+				rfc_counter <= rfc_counter-1;
+			end
+		end
+
+		else begin
+			out_allowed_refresh <= 1;
+			refi_counter <= refi_counter-1;
+		end
+	end
+end
+
 /*************************************************
  * Outputting requests to DRAM on half frequency *
  *************************************************/
@@ -150,13 +192,19 @@ always_ff@(posedge clk or negedge rst_n) begin
 	else half_clk <= ~half_clk;
 end
 
+// this should be able to change when refresh is not holding down at 0
+// thus pull0, weaker than strong0, allows refresh to overwrite
+// thus pull1, stronger than weak1, allows correct output to owerwrite
+logic output_allowed_normal;
+assign (pull0, pull1) output_allowed = output_allowed_normal;
+
 always_ff@(posedge half_clk) begin
-	if (out_ready) begin
+	if (output_allowed) begin
 		out <= out_buffer;
-		out_ready <= 0;
+		output_allowed_normal <= 0;
 
 		if ($test$plusargs("debug"))
-			queue_output_display(queue[$]); // age popping last element, so display that
+			queue_output_display(out_buffer); // age popping last element, so display that
 
 		queue.pop_back();
 		age.pop_back();
@@ -174,5 +222,20 @@ always_ff@(posedge half_clk) begin
 		end
 	end
 end
+
+/*****************************
+ * Out Buffer decision block *
+ *****************************/
+function automatic decide_output_buffer();
+
+
+
+	// forcing age pop on 100+ CPU_clock old entries
+	if (age[$] >= 100) begin
+		out_buffer <= queue[$]; // overwrites decision from decide_output_buffer
+		output_allowed_normal <= 1;
+	end
+
+endfunction
 
 endmodule : queue

@@ -61,23 +61,65 @@ parameter [ADDRESS_WIDTH-1:0] row_mask        = ( {15{1'b1}} << ROW_OFFSET );
 
 // DRAM timing constraints in CPU clock cycles
 // CPU clock - 3.2GHz, DRAM clock - 1.6GHz
-parameter T_RC    = 152;      // 76 DRAM Cycles
-parameter T_RAS   = 104;      // 52
-parameter T_RRD_L = 12;       // 6
-parameter T_RRD_S = 8;        // 4
-parameter T_RP    = 48;       // 24
-parameter T_RFC   = 1120;     // 350ns for a 312.5ps CPU clock period
-parameter T_CWD   = 40;       // 20
-parameter T_CAS   = 48;       // 24
-parameter T_RCD   = 48;       // 24
-parameter T_WR    = 40;       // 20
-parameter T_RTP   = 24;       // 12
-parameter T_CCD_L = 16;       // 8
-parameter T_CCD_S = 8;        // 4
-parameter T_BURST = 8;        // 4
-parameter T_WTR_L = 24;       // 12
-parameter T_WTR_S = 8;        // 4
-parameter T_REFI  = 24960000; // 7.8us for 312.5ps CPU clock period
+parameter T_RC    = 152;   // 76 DRAM Cycles
+parameter T_RAS   = 104;   // 52
+parameter T_RRD_L = 12;    // 6
+parameter T_RRD_S = 8;     // 4
+parameter T_RP    = 48;    // 24
+parameter T_RFC   = 1120;  // 560 -> 350ns for a 312.5ps CPU clock period
+parameter T_CWD   = 40;    // 20
+parameter T_CAS   = 48;    // 24
+parameter T_RCD   = 48;    // 24
+parameter T_WR    = 40;    // 20
+parameter T_RTP   = 24;    // 12
+parameter T_CCD_L = 16;    // 8
+parameter T_CCD_S = 8;     // 4
+parameter T_BURST = 8;     // 4
+parameter T_WTR_L = 24;    // 12
+parameter T_WTR_S = 8;     // 4
+parameter T_REFI  = 24960; // 12480 -> 7.8us for 312.5ps CPU clock period
+
+// all possible operation orders
+parameter OP_ORDER_NO = 7;
+parameter OP_ORDER_NO_BITS = $clog2(OP_ORDER_NO);
+typedef enum logic [OP_ORDER_NO_BITS-1:0] {
+	READ,              // row already activated, only READ required to take correct columns output
+	ACT_READ,          // bank pre-charged, need to activate row and read column
+	PRE_ACT_READ,      // bank not pre-charged, need to activate row and read
+	TR_L_PRE_ACT_READ, // Previous command to same bank, and currently loaded row is wrong, incur T_RRD_L + PRE penalty
+	TR_S_PRE_ACT_READ, // Previous command to different back, but currently loaded row in bank is wrong, T_RRD_S + PRE required
+	TC_L_READ,         // Previous command in same bank, but my currently loaded row is correct, only T_CCD_L penalty
+	TC_S_READ          // Previous command to different bank, but my currently loaded row is correct, T_CCD_S penalty
+} operations_to_do_in_order_t;
+
+// 2-2d structure to keep track of status of 16 banks
+parameter ROW_WIDTH = 15;
+parameter TIMER_WIDTH = $clog2(T_RAS); // biggest of all delays
+
+typedef struct packed {
+
+	logic                       [ROW_WIDTH-1:0]   curr_row;
+	operations_to_do_in_order_t                   curr_operation;
+	logic                       [TIMER_WIDTH-1:0] countdown;
+
+} bank_status_t;
+
+// all DRAM commands
+typedef enum logic [1:0] {
+
+	RD,
+	ACT,
+	PRE
+
+} DRAM_commands_t;
+
+// output from queue
+typedef struct packed {
+
+	DRAM_commands_t                     opcode;
+	logic           [ADDRESS_WIDTH-1:0] address;
+
+} queue_output_t;
 
 endpackage : global_defs
 
