@@ -9,7 +9,7 @@ trace_file = "$(sim_dir)/../traces/trace.txt"
 
 top_module = "queue_tb"
 sim_opts := \
-	+debug \
+	+debug_dram \
 	+tracefile=$(trace_file)
 
 
