@@ -49,6 +49,11 @@ typedef struct packed {
 
 } parser_out_struct_t;
 
+parameter BG_WIDTH = 2;
+parameter BANK_WIDTH = 2;
+parameter COLUMN_WIDTH = 8;
+parameter ROW_WIDTH = 15;
+
 parameter BG_OFFSET = 6;
 parameter BANK_OFFSET = 8;
 parameter COLUMN_OFFSET = 10;
@@ -80,10 +85,12 @@ parameter T_WTR_S = 8;     // 4
 parameter T_REFI  = 24960; // 12480 -> 7.8us for 312.5ps CPU clock period
 
 // all possible operation orders
-parameter OP_ORDER_NO = 7;
+parameter OP_ORDER_NO = 9;
 parameter OP_ORDER_NO_BITS = $clog2(OP_ORDER_NO);
 typedef enum logic [OP_ORDER_NO_BITS-1:0] {
+	NO_OP,
 	READ,              // row already activated, only READ required to take correct columns output
+	WRITE,             // row already activated
 	ACT_READ,          // bank pre-charged, need to activate row and read column
 	PRE_ACT_READ,      // bank not pre-charged, need to activate row and read
 	TR_L_PRE_ACT_READ, // Previous command to same bank, and currently loaded row is wrong, incur T_RRD_L + PRE penalty
@@ -93,33 +100,42 @@ typedef enum logic [OP_ORDER_NO_BITS-1:0] {
 } operations_to_do_in_order_t;
 
 // 2-2d structure to keep track of status of 16 banks
-parameter ROW_WIDTH = 15;
 parameter TIMER_WIDTH = $clog2(T_RAS); // biggest of all delays
 
 typedef struct packed {
 
-	logic                       [ROW_WIDTH-1:0]   curr_row;
-	operations_to_do_in_order_t                   curr_operation;
-	logic                       [TIMER_WIDTH-1:0] countdown;
+	logic                       [ROW_WIDTH-1:0]     curr_row;
+	operations_to_do_in_order_t                     curr_operation;
+	logic                       [ADDRESS_WIDTH-1:0] address;
+	logic                       [TIMER_WIDTH-1:0]   countdown;
 
 } bank_status_t;
 
 // all DRAM commands
-typedef enum logic [1:0] {
+typedef enum logic [2:0] {
 
 	RD,
+	WR,
 	ACT,
-	PRE
+	PRE,
+	REF
 
 } DRAM_commands_t;
 
-// output from queue
+// full output to DRAM
 typedef struct packed {
 
 	DRAM_commands_t                     opcode;
 	logic           [ADDRESS_WIDTH-1:0] address;
 
-} queue_output_t;
+} dram_output_t;
 
+typedef struct packed {
+
+	logic [BG_WIDTH-1:0]   bank_group;
+	logic [BANK_WIDTH-1:0] bank;
+	logic                  wr;
+
+} prev_operation_t;
 endpackage : global_defs
 
