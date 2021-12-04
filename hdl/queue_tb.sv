@@ -75,7 +75,7 @@ initial begin
 	rst_n = 1'b0;
 	#10;
 	rst_n = 1'b1;
-	#10000;
+	#500000;
 	$stop;
 end
 

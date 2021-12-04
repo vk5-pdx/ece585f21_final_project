@@ -233,7 +233,7 @@ always_ff@(posedge half_clk) begin
 
 
 		if ($test$plusargs("debug_dram"))
-			$display("%t : out_dram=%p", $time, out_dram);
+			$display("%t : out_dram = {opcode = %s, address = %0h}", $time, out_dram.opcode, out_dram.address);
 
 		dram_file_print(out_dram.address, out_dram.opcode);
 
@@ -317,7 +317,8 @@ function automatic bank_status_and_output_update();
 				if (bank_status[i][j].curr_operation != NO_OP && bank_status[i][j].countdown == 0) begin
 					// curr_operation is not NO_OP and timer is 0, so no timing can be violated, let's output now
 
-					if($test$plusargs("debug_dram")) $display("%t : bank_status[%0d][%0d] - %p", $time, i, j, bank_status[i][j]);
+					if($test$plusargs("debug_dram")) $display("%t : bank_status[%0d][%0d] - curr_row:%0d curr_operation:%s address:0x%h countdown:%0d",
+			                                                  $time, i, j, bank_status[i][j].curr_row,bank_status[i][j].curr_operation,bank_status[i][j].address,bank_status[i][j].countdown);
 
 
 
