@@ -40,6 +40,14 @@ assign queue_time = curr_time;
 wire output_allowed;
 logic half_clk;
 parser_out_struct_t out_buffer;
+// validation purpose of current operation state
+operations_to_do_in_order_t current_operation_state[2**BG_WIDTH][2**BANK_WIDTH];
+for (genvar i=0; i<(2**BG_WIDTH); i++) begin
+	for (genvar j=0; j<(2**BANK_WIDTH); j++) begin
+		assign current_operation_state[i][j] = bank_status[i][j].curr_operation;
+		// not using current_operation_state in following design, can be ignored
+	end
+end
 
 dram_output_t out_dram;
 
