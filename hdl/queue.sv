@@ -418,8 +418,9 @@ function automatic bank_status_checks();
 
 			bank_status[bank_group][bank].address <= out_buffer.address;
 
-			if ($test$plusargs("debug_dram")) $display("%t : NO_OP found in (%0d,%0d = {%p}), inserting %p",
-			                                            $time, bank_group, bank, bank_status[bank_group][bank], out_buffer);
+			if ($test$plusargs("debug_dram")) $display("%t : NO_OP found in (%0d,%0d = {curr_row:%0d curr_operation:%s address:0x%h countdown:%0d}), inserting %0d %0h %s %0d",
+			                                            $time, bank_group, bank,bank_status[bank_group][bank].curr_row, bank_status[bank_group][bank].curr_operation,bank_status[bank_group][bank].address,bank_status[bank_group][bank].countdown,
+                                                        out_buffer.op_ready_s, out_buffer.opcode, out_buffer.address, out_buffer.time_cpu);
 
 			if (bank_status[bank_group][bank].curr_row == row) begin // currently activated row is referenced again, only need to read
 				//if (out_buffer.opcode == DATA_READ || out_buffer.opcode == OPCODE_FETCH) begin
