@@ -144,7 +144,7 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 				if ($test$plusargs("debug_queue")) $display("%t : QUEUE_EMPTY : queue is empty, advancting time to %0t",$time,in.time_cpu);
 			end
 
-			if ((queue.size() < QUEUE_SIZE && curr_time >= in.time_cpu) || queue.size() == 0) begin
+			if ((queue.size() < QUEUE_SIZE && curr_time >= in.time_cpu && queue[0] != in) || queue.size() == 0) begin
 				queue.push_front(in);
 				age.push_front(0);
 				pending_request <= 1'b0;
