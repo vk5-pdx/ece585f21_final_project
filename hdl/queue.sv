@@ -125,8 +125,8 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 		bank_status <= '{default: '0};
 		previous_operation <= '{default: '0};
 		output_allowed_normal <= 0;
-		activate_countup <= '0;
-		column_countup <= '0;
+		activate_countup <= '1;
+		column_countup <= '1;
 	end
 
 	else begin
@@ -255,17 +255,20 @@ always_ff@(posedge half_clk) begin
 
 
 		if ($test$plusargs("debug_dram"))
-			$display("%t : out_dram = {opcode = %s, address = %0h}", $time, out_dram.opcode, out_dram.address);
+			$display("%t : PUT TO FILE : out_dram = {opcode = %s, address = %0h}", $time, out_dram.opcode, out_dram.address);
 
 		dram_file_print(out_dram.address, out_dram.opcode);
 
-		if ($test$plusargs("debug_queue"))
-			queue_output_display(out_buffer); // age popping last element, so display that
-
 		if (out_dram.opcode == RD || out_dram.opcode == WR) begin // full command outputted, pop from queue now
+			if ($test$plusargs("debug_dram"))
+				$display("%t :   POPPING   : out_dram = {opcode = %s, address = %0h}", $time, out_dram.opcode, out_dram.address);
 			queue.pop_back();
 			age.pop_back();
+
+			if ($test$plusargs("debug_queue"))
+				queue_output_display(out_buffer); // age popping last element, so display that
 		end
+
 
 		if ($test$plusargs("debug_queue")) begin
 			$display("%t :             : queue has %0d elements now :   '{", $time, queue.size());
@@ -343,11 +346,14 @@ function automatic bank_status_and_output_update();
 			for (int j=0; j<(2**BANK_WIDTH); j++) begin
 				// saturation counters, can't go below 0, need to check
 
-				if (bank_status[i][j].curr_operation != NO_OP && bank_status[i][j].countdown != 0) begin
+				if (bank_status[i][j].countdown != 0) begin
 					bank_status[i][j].countdown <= bank_status[i][j].countdown - 1'b1; // count down if a valid operation has a non-zero counter
 				end
-				if (bank_status[i][j].curr_operation != NO_OP && bank_status[i][j].ras_countdown != 0) begin // ras countdown
+				if (bank_status[i][j].ras_countdown != 0) begin // ras countdown
 					bank_status[i][j].ras_countdown <= bank_status[i][j].ras_countdown - 1'b1;
+				end
+				if (bank_status[i][j].rc_countdown != 0) begin // rc countdown
+					bank_status[i][j].rc_countdown <= bank_status[i][j].rc_countdown - 1'b1;
 				end
 
 			end
@@ -361,8 +367,8 @@ function automatic bank_status_and_output_update();
 					// curr_operation is not NO_OP and timer is 0, so no timing can be violated, let's output now
 
 					if($test$plusargs("per_no_op")) begin
-						$display("%t : cpu_time:%0t, countups(activate:column):(%0d:%0d)", $time, curr_time, activate_countup, column_countup);
-						$display("%t : bank_status[%0d][%0d] - curr_row:%0d curr_operation:%s address:0x%h countdowns:%0d,%0d,%0d",
+						$display("%t :  PER NO_OP  : cpu_time:%0t, countups(activate:column):(%0d:%0d)", $time, curr_time, activate_countup, column_countup);
+						$display("%t :  PER NO_OP  : bank_status[%0d][%0d] - curr_row:%0d curr_operation:%s address:0x%h countdowns:%0d,%0d,%0d",
 						           $time, i, j,
 						           bank_status[i][j].curr_row,
 						           bank_status[i][j].curr_operation,
@@ -538,23 +544,37 @@ function automatic bank_status_checks();
 		// for now having non-scheduled memory access, no need to check
 		// curr_operation, just insert
 
-		if (bank_status[bank_group][bank].curr_operation == NO_OP) begin // can insert as prev command is done
+		if ($test$plusargs("per_clk") && bank_status[bank_group][bank].countdown != '0) $display("%t :  PER CLOCK  : bank_status[%0d][%0d] = {curr_row:%0d curr_operation:%s address:0x%h countdown:%0d}",
+		                                            $time,
+		                                            bank_group,
+		                                            bank,
+		                                            bank_status[bank_group][bank].curr_row,
+		                                            bank_status[bank_group][bank].curr_operation,
+		                                            bank_status[bank_group][bank].address,
+		                                            bank_status[bank_group][bank].countdown);
+
+
+		if (bank_status[bank_group][bank].curr_operation == NO_OP && bank_status[bank_group][bank].countdown == '0) begin // can insert as prev command is done
 
 			bank_status[bank_group][bank].address <= out_buffer.address;
 
-			if ($test$plusargs("debug_dram")) $display("%t : NO_OP found in (%0d,%0d = {curr_row:%0d curr_operation:%s address:0x%h countdown:%0d}), inserting={opcode:%p address:0x%h time_cpu:%0d}",
+			if ($test$plusargs("debug_dram")) $display("%t : BANK AVLBL. : NO_OP found in bank_status[%0d][%0d] = {curr_row:%0d curr_operation:%s address:0x%h countdown:%0d}",
 			                                            $time,
 			                                            bank_group,
-			                                            bank,bank_status[bank_group][bank].curr_row,
+			                                            bank,
+			                                            bank_status[bank_group][bank].curr_row,
 			                                            bank_status[bank_group][bank].curr_operation,
 			                                            bank_status[bank_group][bank].address,
-			                                            bank_status[bank_group][bank].countdown,
+			                                            bank_status[bank_group][bank].countdown);
+
+			if ($test$plusargs("debug_dram")) $display("%t : OPER INSRT. : inserting:{opcode:%p address:0x%h time_cpu:%0d}",
+			                                            $time,
 			                                            out_buffer.opcode,
 			                                            out_buffer.address,
 			                                            out_buffer.time_cpu);
 
 
-			if ($test$plusargs("debug_dram")) $display("%t : (open_row,addressed_row):(%0d,%0d) (addressed_bg,prev_bg):(%0d,%0d) prev_op(w/r#):%b",
+			if ($test$plusargs("debug_dram")) $display("%t :   STATUS    : (open_row,addressed_row):(%0d,%0d) (addressed_bg,prev_bg):(%0d,%0d) prev_op(w/r#):%b",
 			                                       $time,
 			                                       bank_status[bank_group][bank].curr_row,
 			                                       row,

@@ -7,6 +7,9 @@ queue:
 parser:
 	$(MAKE) -C sim parser
 
+debug:
+	$(MAKE) -C sim debug
+
 all:
 	$(MAKE) -C sim all
 

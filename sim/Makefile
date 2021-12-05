@@ -30,14 +30,19 @@ all: VLOG
 parser: VLOG
 	cd $(sim_dir)
 		vsim -c -do "run -all ; q" +nowarn3691 \
-		work.parser_tb \
-		$(sim_opts)
+		work.parser_tb
 
 queue: VLOG
 	cd $(sim_dir)
 		vsim -c -do "run -all ; q" +nowarn3691 \
 		work.queue_tb \
-		$(sim_opts)
+		+debug_queue
+
+debug: VLOG
+	cd $(sim_dir)
+	vsim -c -do "run -all ; q" +nowarn3691 \
+		work.$(top_module) \
+		$(sim_opts) +per_no_op +debug_queue +per_clk
 
 gui: VLOG
 	cd $(sim_dir)

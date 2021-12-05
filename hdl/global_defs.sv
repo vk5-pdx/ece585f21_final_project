@@ -21,8 +21,8 @@ parameter QUEUE_SIZE = 16;
 
 typedef logic[31:0] int_t;
 
-parameter BITS_FOR_100 = $clog2(100);
-typedef logic[BITS_FOR_100-1:0] age_counter_t;
+parameter BITS_FOR_1000000 = $clog2(1000000);
+typedef logic[BITS_FOR_1000000-1:0] age_counter_t;
 
 // 3 possible opcodes present in file + NOP extra
 typedef enum logic[1:0] {
