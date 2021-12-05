@@ -300,19 +300,19 @@ function automatic dram_file_print(logic [ADDRESS_WIDTH-1:0] address, DRAM_comma
 		row        = (row_mask & address) >> ROW_OFFSET;
 		column     = (column_mask & address) >> COLUMN_OFFSET;
 
-		$fwrite(dram_file, "%0t %p", curr_time, opcode);
+		$fwrite(dram_file, "%0t\t%p", curr_time, opcode);
 		unique case(opcode)
 			RD: begin
-				$fwrite(dram_file, " %0d %0d %0d", bank_group, bank, column);
+				$fwrite(dram_file, "\t%0d %0d %0d", bank_group, bank, column);
 			end
 			WR: begin
-				$fwrite(dram_file, " %0d %0d %0d", bank_group, bank, column);
+				$fwrite(dram_file, "\t%0d %0d %0d", bank_group, bank, column);
 			end
 			ACT: begin
-				$fwrite(dram_file, " %0d %0d %0d", bank_group, bank, row);
+				$fwrite(dram_file, "\t%0d %0d %0d", bank_group, bank, row);
 			end
 			PRE: begin
-				$fwrite(dram_file, " %0d %0d", bank_group, bank);
+				$fwrite(dram_file, "\t%0d %0d", bank_group, bank);
 			end
 			REF: begin
 			end
@@ -450,6 +450,9 @@ function automatic bank_status_and_output_update();
 								// because we are outputting currently outgoing op is prev_op for following cycles
 								previous_operation.bank_group <= i;
 								previous_operation.bank <= j;
+
+								// precharge is used to activate, not precharged now
+								bank_status[i][j].precharge_status_n <= 1'b1;
 							end
 						end
 						ACT_WRITE: begin
@@ -471,6 +474,9 @@ function automatic bank_status_and_output_update();
 								// because we are outputting currently outgoing op is prev_op for following cycles
 								previous_operation.bank_group <= i;
 								previous_operation.bank <= j;
+
+								// precharge is used to activate, not precharged now
+								bank_status[i][j].precharge_status_n <= 1'b1;
 							end
 						end
 						PRE_ACT_READ: begin
@@ -597,10 +603,12 @@ function automatic bank_status_checks();
 
 			else begin // pre+act+read/write required
 				if (out_buffer.opcode == DATA_READ || out_buffer.opcode == OPCODE_FETCH) begin
-					bank_status[bank_group][bank].curr_operation <= PRE_ACT_READ;
+					if (bank_status[bank_group][bank].precharge_status_n == 1'b0) bank_status[bank_group][bank].curr_operation <= ACT_READ;
+					else bank_status[bank_group][bank].curr_operation <= PRE_ACT_READ;
 				end
 				if (out_buffer.opcode == DATA_WRITE) begin
-					bank_status[bank_group][bank].curr_operation <= PRE_ACT_WRITE;
+					if (bank_status[bank_group][bank].precharge_status_n == 1'b0) bank_status[bank_group][bank].curr_operation <= ACT_WRITE;
+					else bank_status[bank_group][bank].curr_operation <= PRE_ACT_WRITE;
 				end
 			end
 

@@ -106,7 +106,7 @@ parameter TIMER_WIDTH = $clog2(T_RC); // biggest of all delays
 
 typedef struct packed {
 
-	logic                                           precharge_status;
+	logic                                           precharge_status_n;
 	logic                       [ROW_WIDTH-1:0]     curr_row;
 	operations_to_do_in_order_t                     curr_operation;
 	logic                       [ADDRESS_WIDTH-1:0] address;
