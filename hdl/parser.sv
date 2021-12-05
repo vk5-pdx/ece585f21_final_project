@@ -85,10 +85,13 @@ always_ff@(posedge clk ) begin
 		if (next_state == NEW_OP && queue_time >= parsed_clock) begin
 			if ($feof(trace_file)) curr_state <= WAITE;
 			else begin
-				scan_file = $fscanf(trace_file, "%d %d %h", parsed_clock, parsed_op_int, parsed_address);
-				if (parsed_op_int >= 3) begin
+				scan_file = $fscanf(trace_file, "%h %h %h", parsed_clock, parsed_op_int, parsed_address);
+				if (!(parsed_op_int === 0 || parsed_op_int === 1 || parsed_op_int === 2)) begin
 					$display("well played bro, I give up.");
 					$finish;
+				end
+				else begin
+					parsed_op <= parsed_op_t'(parsed_op_int);
 				end
 				if(scan_file == 0) begin
 					$display("Invalid trace_file entry, could not read 3 items from tracefile\n");
