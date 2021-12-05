@@ -400,6 +400,8 @@ function automatic bank_status_and_output_update();
 								out_dram.opcode <= RD;
 								bank_status[i][j].curr_operation <= NO_OP;
 								bank_status[i][j].countdown <= T_CAS+T_BURST;
+								column_countup <= '0;
+
 								previous_operation.write_read_n <= RD;
 
 								output_allowed_normal <= 1; // new output on dram
@@ -419,6 +421,7 @@ function automatic bank_status_and_output_update();
 
 								bank_status[i][j].curr_operation <= NO_OP;
 								bank_status[i][j].countdown <= T_CWD+T_BURST;
+								column_countup <= '0;
 								previous_operation.write_read_n <= WR;
 
 
@@ -438,6 +441,7 @@ function automatic bank_status_and_output_update();
 								output_allowed_normal <= 1; // new output on dram
 
 								bank_status[i][j].curr_operation <= operations_to_do_in_order_t'(1); // gotta typecast for READ command
+								bank_status[i][j].curr_row <= row; // gotta typecast for READ command
 								bank_status[i][j].countdown <= T_RCD;
 								bank_status[i][j].ras_countdown <= T_RAS; // t_ras is from current act to next precharge
 								bank_status[i][j].rc_countdown <= T_RC;   // t_rc, limiting access rate of 1 bank
