@@ -93,6 +93,8 @@ typedef enum logic [OP_ORDER_NO_BITS-1:0] {
 	WRITE,             // row already activated
 	ACT_READ,          // bank pre-charged, need to activate row and read column
 	PRE_ACT_READ,      // bank not pre-charged, need to activate row and read
+	ACT_WRITE,         // same as read
+	PRE_ACT_WRITE,     // same as read
 	TR_L_PRE_ACT_READ, // Previous command to same bank, and currently loaded row is wrong, incur T_RRD_L + PRE penalty
 	TR_S_PRE_ACT_READ, // Previous command to different back, but currently loaded row in bank is wrong, T_RRD_S + PRE required
 	TC_L_READ,         // Previous command in same bank, but my currently loaded row is correct, only T_CCD_L penalty
@@ -100,14 +102,18 @@ typedef enum logic [OP_ORDER_NO_BITS-1:0] {
 } operations_to_do_in_order_t;
 
 // 2-2d structure to keep track of status of 16 banks
-parameter TIMER_WIDTH = $clog2(T_RAS); // biggest of all delays
+parameter TIMER_WIDTH = $clog2(T_RC); // biggest of all delays
 
 typedef struct packed {
 
+	logic                                           precharge_status;
 	logic                       [ROW_WIDTH-1:0]     curr_row;
 	operations_to_do_in_order_t                     curr_operation;
 	logic                       [ADDRESS_WIDTH-1:0] address;
 	logic                       [TIMER_WIDTH-1:0]   countdown;
+	logic                       [TIMER_WIDTH-1:0]   ras_countdown; // from current activate to next precharge ROW_ADDRESS_STROBE
+	                                                               // should happen parallel to normal operation countdown
+	logic                       [TIMER_WIDTH-1:0]   rc_countdown; // only checking in current bank, but otherwise same as oper
 
 } bank_status_t;
 
@@ -134,8 +140,9 @@ typedef struct packed {
 
 	logic [BG_WIDTH-1:0]   bank_group;
 	logic [BANK_WIDTH-1:0] bank;
-	logic                  wr;
+	logic                  write_read_n;
 
 } prev_operation_t;
+
 endpackage : global_defs
 

@@ -40,6 +40,7 @@ assign queue_time = curr_time;
 wire output_allowed;
 logic half_clk;
 parser_out_struct_t out_buffer;
+
 // validation purpose of current operation state
 operations_to_do_in_order_t current_operation_state[2**BG_WIDTH][2**BANK_WIDTH];
 for (genvar i=0; i<(2**BG_WIDTH); i++) begin
@@ -62,6 +63,15 @@ logic output_allowed_normal;
 
 int unsigned dram_file;
 string dram_filename = "dram";
+
+// need to check if access scheduling is not violating t_rrd
+// Because we are checking multiple things, we can't have a downcounter
+// waiting for a 0, we have to count up and then compare whenever we want to
+// provide a new row address i.e. ACTIVATE command
+logic [TIMER_WIDTH-1:0] activate_countup;
+
+// similarly for activate operation countup, but for t_ccd, and t_wtr
+logic [TIMER_WIDTH-1:0] column_countup;
 
 initial begin : dram_file_open
 	dram_file = $fopen(dram_filename, "w");
@@ -113,7 +123,10 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 		out_dram.address <= '0;
 		out_dram.opcode <= RD; // 0 on reset
 		bank_status <= '{default: '0};
+		previous_operation <= '{default: '0};
 		output_allowed_normal <= 0;
+		activate_countup <= '0;
+		column_countup <= '0;
 	end
 
 	else begin
@@ -202,12 +215,13 @@ always_ff@(posedge clk or negedge rst_n) begin
 				out_allowed_refresh <= 1;
 			end
 			else begin
-				if ($test$plusargs("debug_dram") && rfc_counter == T_RFC)
+				if ($test$plusargs("debug_dram") && rfc_counter == T_RFC) begin
 					$display("%t :   REFRESH   : outgoing DRAM commands halted : curr_time = %0d", $time, curr_time);
+					dram_file_print('0, REF);
+				end
 				out_allowed_refresh <= 0;
 				rfc_counter <= rfc_counter-1;
 
-				dram_file_print('0, REF);
 			end
 		end
 
@@ -310,67 +324,168 @@ endfunction
  * Update the bank_status and output file if we can *
  ****************************************************/
 function automatic bank_status_and_output_update();
+	begin
+		logic [BG_WIDTH-1:0] bank_group;
+		logic [BANK_WIDTH-1:0] bank;
+		logic [ROW_WIDTH-1:0] row;
+		logic [COLUMN_WIDTH-1:0] column;
+		bank_group = (bank_group_mask & out_buffer.address) >> BG_OFFSET;
+		bank       = (bank_mask & out_buffer.address) >> BANK_OFFSET;
+		row        = (row_mask & out_buffer.address) >> ROW_OFFSET;
+		column     = (column_mask & out_buffer.address) >> COLUMN_OFFSET;
+
+		// saturation upcount for oper_countup
+		if (activate_countup != '1) activate_countup <= activate_countup+1'b1;
+		if (column_countup != '1) column_countup <= column_countup+1'b1;
+
 		// decrement all countdown in bank_status
 		for (int i=0; i<(2**BG_WIDTH); i++) begin
 			for (int j=0; j<(2**BANK_WIDTH); j++) begin
+				// saturation counters, can't go below 0, need to check
+
 				if (bank_status[i][j].curr_operation != NO_OP && bank_status[i][j].countdown != 0) begin
 					bank_status[i][j].countdown <= bank_status[i][j].countdown - 1'b1; // count down if a valid operation has a non-zero counter
 				end
+				if (bank_status[i][j].curr_operation != NO_OP && bank_status[i][j].ras_countdown != 0) begin // ras countdown
+					bank_status[i][j].ras_countdown <= bank_status[i][j].ras_countdown - 1'b1;
+				end
+
 			end
 		end
 
 		// check if we can output, and call dram_file_write if we can
 		for (int i=0; i<(2**BG_WIDTH); i++) begin
 			for (int j=0; j<(2**BANK_WIDTH); j++) begin
-				if (bank_status[i][j].curr_operation != NO_OP && bank_status[i][j].countdown == 0) begin
+				if (bank_status[i][j].curr_operation != NO_OP
+					   && bank_status[i][j].countdown == 0) begin
 					// curr_operation is not NO_OP and timer is 0, so no timing can be violated, let's output now
 
-					if($test$plusargs("debug_dram")) $display("%t : bank_status[%0d][%0d] - curr_row:%0d curr_operation:%s address:0x%h countdown:%0d",
-			                                                  $time, i, j, bank_status[i][j].curr_row,bank_status[i][j].curr_operation,bank_status[i][j].address,bank_status[i][j].countdown);
+					if($test$plusargs("per_no_op")) begin
+						$display("%t : cpu_time:%0t, countups(activate:column):(%0d:%0d)", $time, curr_time, activate_countup, column_countup);
+						$display("%t : bank_status[%0d][%0d] - curr_row:%0d curr_operation:%s address:0x%h countdowns:%0d,%0d,%0d",
+						           $time, i, j,
+						           bank_status[i][j].curr_row,
+						           bank_status[i][j].curr_operation,
+						           bank_status[i][j].address,
+						           bank_status[i][j].countdown,
+						           bank_status[i][j].ras_countdown,
+						           bank_status[i][j].rc_countdown);
+				  end
 
 
-
-					// because we are outputting currently outgoing op is prev_op for following cycles
-					previous_operation.bank_group <= i;
-					previous_operation.bank <= j;
 
 					unique case(bank_status[i][j].curr_operation)
-						NO_OP: begin
-						end// not possible
+						NO_OP: begin // not possible
+						end
 						READ: begin
-							out_dram.address <= bank_status[i][j].address;
-							out_dram.opcode <= RD;
-							bank_status[i][j].curr_operation <= NO_OP;
-							bank_status[i][j].countdown <= T_CAS+T_BURST;
-							previous_operation.wr <= RD;
+							if (    ((previous_operation.write_read_n == RD) // t_ccd
+							           && ((previous_operation.bank_group == bank_group && column_countup >= T_CCD_L)
+							                  || (previous_operation.bank_group != bank_group && column_countup >= T_CCD_S)
+							              )
+							        )
+							     || ((previous_operation.write_read_n == WR) // t_wtr
+							           && ((previous_operation.bank_group == bank_group && column_countup >= T_WTR_L)
+							                  || (previous_operation.bank_group != bank_group && column_countup >= T_WTR_S)
+							              )
+							        )
+							) begin
 
-							output_allowed_normal <= 1; // new output on dram
+								out_dram.address <= bank_status[i][j].address;
+								out_dram.opcode <= RD;
+								bank_status[i][j].curr_operation <= NO_OP;
+								bank_status[i][j].countdown <= T_CAS+T_BURST;
+								previous_operation.write_read_n <= RD;
+
+								output_allowed_normal <= 1; // new output on dram
+
+								// because we are outputting currently outgoing op is prev_op for following cycles
+								previous_operation.bank_group <= i;
+								previous_operation.bank <= j;
+							end
 						end
 						WRITE: begin
-							out_dram.address <= bank_status[i][j].address;
-							out_dram.opcode <= WR;
-							bank_status[i][j].curr_operation <= NO_OP;
-							bank_status[i][j].countdown <= T_CAS+T_BURST;
-							previous_operation.wr <= WR;
+							if ((previous_operation.bank_group == bank_group && column_countup >= T_CCD_L)
+							     || (previous_operation.bank_group != bank_group && column_countup >= T_CCD_S)
+							) begin
+								out_dram.address <= bank_status[i][j].address;
+								out_dram.opcode <= WR;
+								output_allowed_normal <= 1; // new output on dram
 
-							output_allowed_normal <= 1; // new output on dram
+								bank_status[i][j].curr_operation <= NO_OP;
+								bank_status[i][j].countdown <= T_CWD+T_BURST;
+								previous_operation.write_read_n <= WR;
+
+
+								// because we are outputting currently outgoing op is prev_op for following cycles
+								previous_operation.bank_group <= i;
+								previous_operation.bank <= j;
+							end
 						end
 						ACT_READ: begin
-							out_dram.address <= bank_status[i][j].address;
-							out_dram.opcode <= ACT;
-							bank_status[i][j].curr_operation <= operations_to_do_in_order_t'(1); // gotta typecast for READ command
-							bank_status[i][j].countdown <= T_RCD;
+							if (bank_status[i][j].rc_countdown == '0 // t_rc for this bank not satisfied, can't do another activate
+									&& (    (previous_operation.bank_group == bank_group && activate_countup >= T_RRD_L) // checking rrds dependant
+										  || (previous_operation.bank_group != bank_group && activate_countup >= T_RRD_S) // on previous command
+										)
+							) begin
+								out_dram.address <= bank_status[i][j].address;
+								out_dram.opcode <= ACT;
+								output_allowed_normal <= 1; // new output on dram
 
-							output_allowed_normal <= 1; // new output on dram
+								bank_status[i][j].curr_operation <= operations_to_do_in_order_t'(1); // gotta typecast for READ command
+								bank_status[i][j].countdown <= T_RCD;
+								bank_status[i][j].ras_countdown <= T_RAS; // t_ras is from current act to next precharge
+								bank_status[i][j].rc_countdown <= T_RC;   // t_rc, limiting access rate of 1 bank
+								activate_countup <= 0;                   // t_rrd counter started here
+
+								// because we are outputting currently outgoing op is prev_op for following cycles
+								previous_operation.bank_group <= i;
+								previous_operation.bank <= j;
+							end
+						end
+						ACT_WRITE: begin
+							if (bank_status[i][j].rc_countdown == '0 // t_rc for this bank not satisfied, can't do another activate
+									&& (    (previous_operation.bank_group == bank_group && activate_countup >= T_RRD_L) // checking rrds dependant
+										  || (previous_operation.bank_group != bank_group && activate_countup >= T_RRD_S) // on previous command
+										)
+							) begin
+								out_dram.address <= bank_status[i][j].address;
+								out_dram.opcode <= ACT;
+								output_allowed_normal <= 1; // new output on dram
+
+								bank_status[i][j].curr_operation <= WRITE;
+								bank_status[i][j].countdown <= T_RCD;
+								bank_status[i][j].ras_countdown <= T_RAS; // t_ras is from current act to next precharge
+								bank_status[i][j].rc_countdown <= T_RC;   // t_rc, limiting access rate of 1 bank
+								activate_countup <= 0;                   // t_rrd counter started here
+
+								// because we are outputting currently outgoing op is prev_op for following cycles
+								previous_operation.bank_group <= i;
+								previous_operation.bank <= j;
+							end
 						end
 						PRE_ACT_READ: begin
-							out_dram.address <= bank_status[i][j].address;
-							out_dram.opcode <= PRE;
-							bank_status[i][j].curr_operation <= ACT_READ;
-							bank_status[i][j].countdown <= T_RP;
+							if (bank_status[i][j].ras_countdown == '0) begin // can't precharge until t_ras is satisfied
+								out_dram.address <= bank_status[i][j].address;
+								out_dram.opcode <= PRE;
+								output_allowed_normal <= 1; // new output on dram
 
-							output_allowed_normal <= 1; // new output on dram
+								bank_status[i][j].curr_operation <= ACT_READ;
+								bank_status[i][j].countdown <= T_RP;
+							end
 						end
+						PRE_ACT_WRITE: begin
+							if (bank_status[i][j].ras_countdown == '0) begin // can't precharge until t_ras is satisfied
+								out_dram.address <= bank_status[i][j].address;
+								out_dram.opcode <= PRE;
+								output_allowed_normal <= 1; // new output on dram
+
+								bank_status[i][j].curr_operation <= ACT_WRITE;
+								bank_status[i][j].countdown <= T_RP;
+							end
+						end
+
+
+						// all states below this may be useless
 						TR_L_PRE_ACT_READ: begin
 							// nothing to output
 							bank_status[i][j].curr_operation <= PRE_ACT_READ;
@@ -397,6 +512,7 @@ function automatic bank_status_and_output_update();
 		end
 
 		//if($test$plusargs("debug_dram")) $display("%t : %p", $time, bank_status);
+	end
 
 endfunction
 
@@ -426,39 +542,44 @@ function automatic bank_status_checks();
 
 			bank_status[bank_group][bank].address <= out_buffer.address;
 
-			if ($test$plusargs("debug_dram")) $display("%t : NO_OP found in (%0d,%0d = {curr_row:%0d curr_operation:%s address:0x%h countdown:%0d}), inserting %0d %0h %s %0d",
-			                                            $time, bank_group, bank,bank_status[bank_group][bank].curr_row, bank_status[bank_group][bank].curr_operation,bank_status[bank_group][bank].address,bank_status[bank_group][bank].countdown,
-                                                        out_buffer.op_ready_s, out_buffer.opcode, out_buffer.address, out_buffer.time_cpu);
+			if ($test$plusargs("debug_dram")) $display("%t : NO_OP found in (%0d,%0d = {curr_row:%0d curr_operation:%s address:0x%h countdown:%0d}), inserting={opcode:%p address:0x%h time_cpu:%0d}",
+			                                            $time,
+			                                            bank_group,
+			                                            bank,bank_status[bank_group][bank].curr_row,
+			                                            bank_status[bank_group][bank].curr_operation,
+			                                            bank_status[bank_group][bank].address,
+			                                            bank_status[bank_group][bank].countdown,
+			                                            out_buffer.opcode,
+			                                            out_buffer.address,
+			                                            out_buffer.time_cpu);
 
-			if (bank_status[bank_group][bank].curr_row == row) begin // currently activated row is referenced again, only need to read
-				//if (out_buffer.opcode == DATA_READ || out_buffer.opcode == OPCODE_FETCH) begin
 
-					if ($test$plusargs("debug_dram")) $display("%t : current row is correct (%0d,%0d) (%0d,%0d)",
-						$time, bank_status[bank_group][bank].curr_row, row, bank_group ,previous_operation.bank_group);
+			if ($test$plusargs("debug_dram")) $display("%t : (open_row,addressed_row):(%0d,%0d) (addressed_bg,prev_bg):(%0d,%0d) prev_op(w/r#):%b",
+			                                       $time,
+			                                       bank_status[bank_group][bank].curr_row,
+			                                       row,
+			                                       bank_group,
+			                                       previous_operation.bank_group,
+			                                       previous_operation.write_read_n);
 
-					if (bank_group == previous_operation.bank_group) begin
-						bank_status[bank_group][bank].curr_operation <= TC_L_READ; // same bg, tc_l penalty
-					end else begin
-						bank_status[bank_group][bank].curr_operation <= TC_S_READ; // different bg, tc_s penalty
-					end
-
-				//end
+			if (row == bank_status[bank_group][bank].curr_row) begin // only read / write required
+				if (out_buffer.opcode == DATA_READ || out_buffer.opcode == OPCODE_FETCH) begin
+					bank_status[bank_group][bank].curr_operation <= READ;
+				end
+				if (out_buffer.opcode == DATA_WRITE) begin
+					bank_status[bank_group][bank].curr_operation <= WRITE;
+				end
 			end
 
-			else begin // currently active row is not referenced this time, neet to precharge activate and read
-				//if (out_buffer.opcode == DATA_READ || out_buffer.opcode == OPCODE_FETCH) begin
-
-					if ($test$plusargs("debug_dram")) $display("%t : current row is wrong", $time);
-					if (bank_group == previous_operation.bank_group) begin
-						bank_status[bank_group][bank].curr_operation <= TR_L_PRE_ACT_READ; // same bg, tr_l penalty
-					end else begin
-						bank_status[bank_group][bank].curr_operation <= TR_S_PRE_ACT_READ; // different bg, tr_s penalty
-					end
-
-				//end
+			else begin // pre+act+read/write required
+				if (out_buffer.opcode == DATA_READ || out_buffer.opcode == OPCODE_FETCH) begin
+					bank_status[bank_group][bank].curr_operation <= PRE_ACT_READ;
+				end
+				if (out_buffer.opcode == DATA_WRITE) begin
+					bank_status[bank_group][bank].curr_operation <= PRE_ACT_WRITE;
+				end
 			end
 
-			//if($test$plusargs("debug_dram")) $display("%t : %p", $time, bank_status);
 
 		end
 	end
