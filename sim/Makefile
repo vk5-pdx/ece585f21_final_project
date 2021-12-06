@@ -8,9 +8,8 @@ sv_files := $(shell find $(source_dir) -name '*.sv')
 trace_file = "$(sim_dir)/../traces/trace.txt"
 
 top_module = "queue_tb"
-sim_opts := \
-	+debug_dram \
-	+tracefile=$(trace_file)
+trace_file := +tracefile=$(trace_file)
+sim_opts := +debug_dram
 
 
 VLIB:
@@ -25,30 +24,35 @@ all: VLOG
 	cd $(sim_dir)
 	vsim -c -do "run -all ; q" +nowarn3691 \
 		work.$(top_module) \
-		$(sim_opts)
+		$(sim_opts) \
+		$(trace_file)
 
 parser: VLOG
 	cd $(sim_dir)
 		vsim -c -do "run -all ; q" +nowarn3691 \
-		work.parser_tb
+		work.parser_tb \
+		$(trace_file)
 
 queue: VLOG
 	cd $(sim_dir)
 		vsim -c -do "run -all ; q" +nowarn3691 \
 		work.queue_tb \
-		+debug_queue
+		+debug_queue \
+		$(trace_file)
 
 debug: VLOG
 	cd $(sim_dir)
 	vsim -c -do "run -all ; q" +nowarn3691 \
 		work.$(top_module) \
-		$(sim_opts) +per_no_op +debug_queue +per_clk
+		$(sim_opts) +per_no_op +debug_queue +per_clk \
+		$(trace_file)
 
 gui: VLOG
 	cd $(sim_dir)
 	vsim -voptargs=+acc -do "run -all" +nowarn3691 \ # TODO : add waveform addition commands before "run -all" to display correctly
 		work.$(top_module) \
-		$(sim_opts)
+		$(sim_opts) \
+		$(trace_file)
 
 clean:
 	echo "why?"
