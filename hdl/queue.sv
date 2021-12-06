@@ -132,9 +132,7 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 	else begin
 
 		// output from queue
-		decide_output_buffer();
-		bank_status_checks();
-		bank_status_and_output_update();
+
 
 		// taking input from parser
 		if (in.op_ready_s) begin
@@ -171,6 +169,12 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 				pending_request <= 1'b1;
 			end
 		end
+
+		decide_output_buffer();
+		bank_status_checks();
+		bank_status_and_output_update();
+
+
 	end
 end : parser_in
 
