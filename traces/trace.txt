@@ -1,1 +1,1 @@
-normal_trace.txt
+t_ccd.txt
