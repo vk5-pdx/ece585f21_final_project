@@ -131,7 +131,6 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 
 	else begin
 
-		// output from queue
 
 
 		// taking input from parser
@@ -169,12 +168,10 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 				pending_request <= 1'b1;
 			end
 		end
-
+		// output from queue
 		decide_output_buffer();
 		bank_status_checks();
 		bank_status_and_output_update();
-
-
 	end
 end : parser_in
 
@@ -263,7 +260,7 @@ always_ff@(posedge half_clk) begin
 
 		dram_file_print(out_dram.address, out_dram.opcode);
 
-		if (out_dram.opcode == RD || out_dram.opcode == WR) begin // full command outputted, pop from queue now
+		if (out_dram.opcode == RD || out_dram.opcode == WR || out_dram.opcode == INSTR_FET) begin // full command outputted, pop from queue now
 			if ($test$plusargs("debug_dram"))
 				$display("%t :   POPPING   : out_dram = {opcode = %s, address = %0h}", $time, out_dram.opcode, out_dram.address);
 			queue.pop_back();
@@ -319,6 +316,9 @@ function automatic dram_file_print(logic [ADDRESS_WIDTH-1:0] address, DRAM_comma
 				$fwrite(dram_file, "\t%0d %0d", bank_group, bank);
 			end
 			REF: begin
+			end
+			INSTR_FET : begin
+				$fwrite(dram_file, "\t%0d %0d %0d", bank_group, bank, column);
 			end
 		endcase
 
@@ -434,6 +434,25 @@ function automatic bank_status_and_output_update();
 								previous_operation.bank <= j;
 							end
 						end
+						INSTR_FETCH: begin
+							if ((previous_operation.bank_group == bank_group && column_countup >= T_CCD_L)
+							     || (previous_operation.bank_group != bank_group && column_countup >= T_CCD_S)
+							) begin
+								out_dram.address <= bank_status[i][j].address;
+								out_dram.opcode <= INSTR_FET;
+								output_allowed_normal <= 1; // new output on dram
+
+								bank_status[i][j].curr_operation <= NO_OP;
+								bank_status[i][j].countdown <= T_CWD+T_BURST;
+								column_countup <= '0;
+								previous_operation.write_read_n <= INSTR_FET;
+
+
+								// because we are outputting currently outgoing op is prev_op for following cycles
+								previous_operation.bank_group <= i;
+								previous_operation.bank <= j;
+							end
+						end
 						ACT_READ: begin
 							if (bank_status[i][j].rc_countdown == '0 // t_rc for this bank not satisfied, can't do another activate
 									&& (    (previous_operation.bank_group == bank_group && activate_countup >= T_RRD_L) // checking rrds dependant
@@ -483,6 +502,30 @@ function automatic bank_status_and_output_update();
 								bank_status[i][j].precharge_status_n <= 1'b1;
 							end
 						end
+						ACT_INSTR_FETCH: begin
+							if (bank_status[i][j].rc_countdown == '0 // t_rc for this bank not satisfied, can't do another activate
+									&& (    (previous_operation.bank_group == bank_group && activate_countup >= T_RRD_L) // checking rrds dependant
+										  || (previous_operation.bank_group != bank_group && activate_countup >= T_RRD_S) // on previous command
+										)
+							) begin
+								out_dram.address <= bank_status[i][j].address;
+								out_dram.opcode <= ACT;
+								output_allowed_normal <= 1; // new output on dram
+
+								bank_status[i][j].curr_operation <= INSTR_FETCH;
+								bank_status[i][j].countdown <= T_RCD;
+								bank_status[i][j].ras_countdown <= T_RAS; // t_ras is from current act to next precharge
+								bank_status[i][j].rc_countdown <= T_RC;   // t_rc, limiting access rate of 1 bank
+								activate_countup <= 0;                   // t_rrd counter started here
+
+								// because we are outputting currently outgoing op is prev_op for following cycles
+								previous_operation.bank_group <= i;
+								previous_operation.bank <= j;
+
+								// precharge is used to activate, not precharged now
+								bank_status[i][j].precharge_status_n <= 1'b1;
+							end
+						end
 						PRE_ACT_READ: begin
 							if (bank_status[i][j].ras_countdown == '0) begin // can't precharge until t_ras is satisfied
 								out_dram.address <= bank_status[i][j].address;
@@ -503,7 +546,16 @@ function automatic bank_status_and_output_update();
 								bank_status[i][j].countdown <= T_RP;
 							end
 						end
+						PRE_ACT_INSTR_FETCH: begin
+							if (bank_status[i][j].ras_countdown == '0) begin // can't precharge until t_ras is satisfied
+								out_dram.address <= bank_status[i][j].address;
+								out_dram.opcode <= PRE;
+								output_allowed_normal <= 1; // new output on dram
 
+								bank_status[i][j].curr_operation <= ACT_INSTR_FETCH;
+								bank_status[i][j].countdown <= T_RP;
+							end
+						end
 
 						// all states below this may be useless
 						TR_L_PRE_ACT_READ: begin
@@ -597,22 +649,29 @@ function automatic bank_status_checks();
 			                                       previous_operation.write_read_n);
 
 			if (row == bank_status[bank_group][bank].curr_row) begin // only read / write required
-				if (out_buffer.opcode == DATA_READ || out_buffer.opcode == OPCODE_FETCH) begin
+				if (out_buffer.opcode == DATA_READ ) begin
 					bank_status[bank_group][bank].curr_operation <= READ;
 				end
 				if (out_buffer.opcode == DATA_WRITE) begin
 					bank_status[bank_group][bank].curr_operation <= WRITE;
 				end
+				if (out_buffer.opcode == OPCODE_FETCH) begin
+					bank_status[bank_group][bank].curr_operation <= INSTR_FETCH;
+				end
 			end
 
 			else begin // pre+act+read/write required
-				if (out_buffer.opcode == DATA_READ || out_buffer.opcode == OPCODE_FETCH) begin
+				if (out_buffer.opcode == DATA_READ ) begin
 					if (bank_status[bank_group][bank].precharge_status_n == 1'b0) bank_status[bank_group][bank].curr_operation <= ACT_READ;
 					else bank_status[bank_group][bank].curr_operation <= PRE_ACT_READ;
 				end
 				if (out_buffer.opcode == DATA_WRITE) begin
 					if (bank_status[bank_group][bank].precharge_status_n == 1'b0) bank_status[bank_group][bank].curr_operation <= ACT_WRITE;
 					else bank_status[bank_group][bank].curr_operation <= PRE_ACT_WRITE;
+				end
+				if (out_buffer.opcode == OPCODE_FETCH) begin
+					if (bank_status[bank_group][bank].precharge_status_n == 1'b0) bank_status[bank_group][bank].curr_operation <= ACT_INSTR_FETCH;
+					else bank_status[bank_group][bank].curr_operation <= PRE_ACT_INSTR_FETCH;
 				end
 			end
 

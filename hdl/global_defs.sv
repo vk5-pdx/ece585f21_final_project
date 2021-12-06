@@ -91,10 +91,13 @@ typedef enum logic [OP_ORDER_NO_BITS-1:0] {
 	NO_OP,
 	READ,              // row already activated, only READ required to take correct columns output
 	WRITE,             // row already activated
+	INSTR_FETCH,
 	ACT_READ,          // bank pre-charged, need to activate row and read column
 	PRE_ACT_READ,      // bank not pre-charged, need to activate row and read
 	ACT_WRITE,         // same as read
 	PRE_ACT_WRITE,     // same as read
+	ACT_INSTR_FETCH,
+	PRE_ACT_INSTR_FETCH,
 	TR_L_PRE_ACT_READ, // Previous command to same bank, and currently loaded row is wrong, incur T_RRD_L + PRE penalty
 	TR_S_PRE_ACT_READ, // Previous command to different back, but currently loaded row in bank is wrong, T_RRD_S + PRE required
 	TC_L_READ,         // Previous command in same bank, but my currently loaded row is correct, only T_CCD_L penalty
@@ -124,6 +127,7 @@ typedef enum logic [2:0] {
 	WR,
 	ACT,
 	PRE,
+	INSTR_FET,
 	REF
 
 } DRAM_commands_t;
