@@ -18,6 +18,7 @@ VLIB:
 
 VLOG: VLIB
 	cd $(sim_dir)
+	vlog ../hdl/global_defs.sv
 	vlog $(sv_files)
 
 all: VLOG
