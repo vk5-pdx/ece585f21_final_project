@@ -153,6 +153,7 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 				queue.push_front(in);
 				age.push_front(0);
 				pending_request <= 1'b0;
+				if (is_active != '0) is_active = is_active * 2; // effectively a left shift
 
 
 				if ($test$plusargs("debug_queue")) begin
@@ -164,13 +165,15 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 					          curr_time);
 					$display("%t :             : queue has %0d elements now :   '{",$time, queue.size());
 					for (int j=0; j < queue.size(); j++) begin
-						$display("#                                                              '{time_cpu:%0t, opcode:%p, address:0x%h}' '{age:%0d}' '{%0d,%0d}',",
-						           queue[j].time_cpu,
-						           queue[j].opcode,
-						           queue[j].address,
-						           age[j],
-						           (bank_group_mask & queue[j].address) >> BG_OFFSET,
-						           (bank_mask & queue[j].address) >> BANK_OFFSET);
+							$display("#                                                              '{%0d,%0d}' - %0d,%0b - '{time_cpu:%0t, opcode:%p, address:0x%h}' '{age:%0d}',",
+							           (bank_group_mask & queue[j].address) >> BG_OFFSET,
+							           (bank_mask & queue[j].address) >> BANK_OFFSET,
+							           j,
+							           is_active[j],
+							           queue[j].time_cpu,
+							           queue[j].opcode,
+							           queue[j].address,
+							           age[j]);
 					end
 					$display("#                                                             }'");
 				end
@@ -277,33 +280,36 @@ always_ff@(posedge half_clk) begin
 		if (out_dram.opcode == RD || out_dram.opcode == WR) begin // full command outputted, pop from queue now
 			if ($test$plusargs("debug_dram"))
 				$display("%t :   POPPING   : out_dram = {opcode = %s, address = %0h}, element %0d from queue", $time, out_dram.opcode, out_dram.address, is_outputted);
+
+		//	if ($test$plusargs("debug_queue"))
+		//		queue_output_display(queue[is_outputted]); // age popping last element, so display that
+
 			if (is_outputted == 0) begin
 				queue.pop_back();
 				age.pop_back();
 			end
-
 			else begin
+
 				queue.delete(is_outputted);
 				age.delete(is_outputted);
 			end
 
-			is_active <= is_active / 2; // clearing the MSB that is 1
-
-			if ($test$plusargs("debug_queue"))
-				queue_output_display(out_buffer); // age popping last element, so display that
+			is_active[is_outputted] <= 1'b0;
 		end
 
 
 		if ($test$plusargs("debug_queue")) begin
 			$display("%t :             : queue has %0d elements now :   '{", $time, queue.size());
 			for (int j=0; j < queue.size(); j++) begin
-				$display("#                                                              '{time_cpu:%0t, opcode:%p, address:0x%h}' '{age:%0d}' '{%0d,%0d}',",
+				$display("#                                                              '{%0d,%0d}' - %0d,%0b - '{time_cpu:%0t, opcode:%p, address:0x%h}' '{age:%0d}',",
+						     (bank_group_mask & queue[j].address) >> BG_OFFSET,
+						     (bank_mask & queue[j].address) >> BANK_OFFSET,
+							  j,
+							  is_active[j],
 							  queue[j].time_cpu,
 							  queue[j].opcode,
 							  queue[j].address,
-						     age[j],
-						     (bank_group_mask & queue[j].address) >> BG_OFFSET,
-						     (bank_mask & queue[j].address) >> BANK_OFFSET);
+						     age[j]);
 			end
 			$display("#                                                             }'");
 		end
@@ -354,6 +360,9 @@ endfunction
  ****************************************************/
 function automatic bank_status_and_output_update();
 	begin
+		// to check if we have made a decision and need to break from loop
+		logic to_break = 1'b0;
+
 		logic [BG_WIDTH-1:0] bank_group;
 		logic [BANK_WIDTH-1:0] bank;
 		logic [ROW_WIDTH-1:0] row;
@@ -363,7 +372,7 @@ function automatic bank_status_and_output_update();
 		row        = (row_mask & out_buffer.address) >> ROW_OFFSET;
 		column     = (column_mask & out_buffer.address) >> COLUMN_OFFSET;
 
-		// saturation upcount fok
+		// saturation upcount for t_ccd, t_rrd, t_wtr etc
 		if (activate_countup != '1) activate_countup <= activate_countup+1'b1;
 		if (column_countup != '1) column_countup <= column_countup+1'b1;
 
@@ -438,6 +447,9 @@ function automatic bank_status_and_output_update();
 								previous_operation.bank <= j;
 
 								is_outputted <= bank_status[i][j].queue_location;
+
+								i = 2**BG_WIDTH;
+								j = 2**BANK_WIDTH;
 							end
 						end
 						WRITE: begin
@@ -459,6 +471,11 @@ function automatic bank_status_and_output_update();
 								previous_operation.bank <= j;
 
 								is_outputted <= bank_status[i][j].queue_location;
+
+								to_break = 1'b1;
+
+								i = 2**BG_WIDTH;
+								j = 2**BANK_WIDTH;
 							end
 						end
 						ACT_READ: begin
@@ -484,6 +501,11 @@ function automatic bank_status_and_output_update();
 
 								// precharge is used to activate, not precharged now
 								bank_status[i][j].precharge_status_n <= 1'b1;
+
+								to_break = 1'b1;
+
+								i = 2**BG_WIDTH;
+								j = 2**BANK_WIDTH;
 							end
 						end
 						ACT_WRITE: begin
@@ -508,6 +530,11 @@ function automatic bank_status_and_output_update();
 
 								// precharge is used to activate, not precharged now
 								bank_status[i][j].precharge_status_n <= 1'b1;
+
+								to_break = 1'b1;
+
+								i = 2**BG_WIDTH;
+								j = 2**BANK_WIDTH;
 							end
 						end
 						PRE_ACT_READ: begin
@@ -518,6 +545,11 @@ function automatic bank_status_and_output_update();
 
 								bank_status[i][j].curr_operation <= ACT_READ;
 								bank_status[i][j].countdown <= T_RP;
+
+								to_break = 1'b1;
+
+								i = 2**BG_WIDTH;
+								j = 2**BANK_WIDTH;
 							end
 						end
 						PRE_ACT_WRITE: begin
@@ -528,6 +560,11 @@ function automatic bank_status_and_output_update();
 
 								bank_status[i][j].curr_operation <= ACT_WRITE;
 								bank_status[i][j].countdown <= T_RP;
+
+								to_break = 1'b1;
+
+								i = 2**BG_WIDTH;
+								j = 2**BANK_WIDTH;
 							end
 						end
 
@@ -554,6 +591,12 @@ function automatic bank_status_and_output_update();
 							bank_status[i][j].countdown <= T_CCD_S;
 						end
 					endcase
+
+					if (to_break == 1'b1) break;
+				end
+				if (to_break == 1'b1) begin
+					to_break = 1'b0;
+					break;
 				end
 			end
 		end
@@ -673,6 +716,23 @@ function automatic decide_bank_operations();
 		for (int i=0; i<queue.size(); i++) begin    // check if queue command is already active i.e. tracked inside bank status
 			// otherwise just mark it for being inserted
 
+			if ($test$plusargs("per_clk") && bank_status[bank_group][bank].countdown != '0)
+				$display("%t :  PER CLOCK  : bank_status[%0d][%0d]:{row:%0d operation:%s add:0x%h cd:%0d q:%0d}, act:0x%h, out:%d, queue:%0d",
+				                 $time,
+				                 bank_group,
+				                 bank,
+				                 bank_status[bank_group][bank].curr_row,
+				                 bank_status[bank_group][bank].curr_operation,
+				                 bank_status[bank_group][bank].address,
+				                 bank_status[bank_group][bank].countdown,
+				                 bank_status[bank_group][bank].queue_location,
+				                 is_active,
+				                 is_outputted,
+				                 i);
+
+			if ($test$plusargs("per_clk") && bank_status[bank_group][bank].countdown != '0)
+						$displayh("%t :             : out_buffer=%p", $time, out_buffer);
+
 			if (is_active[i] == 1'b0) begin
 				bank_group = (bank_group_mask & queue[i].address) >> BG_OFFSET;
 				bank       = (bank_mask & queue[i].address) >> BANK_OFFSET;
@@ -684,22 +744,7 @@ function automatic decide_bank_operations();
 					//        || bank_status[(bank_group_mask & queue[i].address) >> BG_OFFSET][(bank_mask & queue[i].address) >> BANK_OFFSET].countdown != '0 ) continue;
 					if (bank_status[bank_group][bank].curr_operation != NO_OP
 						|| bank_status[bank_group][bank].countdown != '0 ) continue;
-					else out_buffer = queue[i]; // TODO : check if out_buffer is redundant
-
-
-					if ($test$plusargs("per_clk") && bank_status[bank_group][bank].countdown != '0)
-						$display("%t :  PER CLOCK  : bank_status[%0d][%0d]:{row:%0d operation:%s add:0x%h cd:%0d q:%0d}, act:0x%h, out:%d, queue:%d",
-						                 $time,
-						                 bank_group,
-						                 bank,
-						                 bank_status[bank_group][bank].curr_row,
-						                 bank_status[bank_group][bank].curr_operation,
-						                 bank_status[bank_group][bank].address,
-						                 bank_status[bank_group][bank].countdown,
-						                 bank_status[bank_group][bank].queue_location,
-						                 is_active,
-						                 is_outputted,
-						                 i);
+					else out_buffer = queue[i];
 
 
 					// checking if new queue item can be inserted in bank_status
