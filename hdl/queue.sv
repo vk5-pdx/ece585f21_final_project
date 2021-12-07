@@ -144,7 +144,7 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 		// taking input from parser
 		if (in.op_ready_s) begin
 
-			if (queue.size() == 0) begin
+			if (queue.size() == 0 && curr_time < in.time_cpu) begin
 				curr_time <= in.time_cpu; // time skip in empty queue
 				if ($test$plusargs("debug_queue")) $display("%t : QUEUE_EMPTY : queue is empty, advancting time to %0t",$time,in.time_cpu);
 			end
