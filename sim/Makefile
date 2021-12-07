@@ -5,11 +5,13 @@ sim_dir := $(shell pwd)
 source_dir := $(shell pwd)/../hdl/
 sv_files := $(shell find $(source_dir) -name '*.sv')
 
-trace_file = "$(sim_dir)/../trace_file.txt"
-top_module = "parser_tb"
+trace_file = "$(sim_dir)/../traces/trace.txt"
+
+top_module = "queue_tb"
 sim_opts := \
 	+debug \
 	+tracefile=$(trace_file)
+
 
 VLIB:
 	cd $(sim_dir)
@@ -21,14 +23,26 @@ VLOG: VLIB
 
 all: VLOG
 	cd $(sim_dir)
-	vsim -c -do "run -all" +nowarn3691 \
+	vsim -c -do "run -all ; q" +nowarn3691 \
 		work.$(top_module) \
 		$(sim_opts)
 
 parser: VLOG
 	cd $(sim_dir)
-		vsim -c -do "run -all" +nowarn3691 \
+		vsim -c -do "run -all ; q" +nowarn3691 \
 		work.parser_tb \
+		$(sim_opts)
+
+queue: VLOG
+	cd $(sim_dir)
+		vsim -c -do "run -all ; q" +nowarn3691 \
+		work.queue_tb \
+		$(sim_opts)
+
+gui: VLOG
+	cd $(sim_dir)
+	vsim -voptargs=+acc -do "run -all" +nowarn3691 \ # TODO : add waveform addition commands before "run -all" to display correctly
+		work.$(top_module) \
 		$(sim_opts)
 
 clean:
