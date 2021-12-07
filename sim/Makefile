@@ -1,13 +1,49 @@
 # makefile for standard compilation
-sim_dir = $(shell pwd)
+.PHONY : VSIM VLOG VLIB parser all clean
 
-parser:
+sim_dir := $(shell pwd)
+source_dir := $(shell pwd)/../hdl/
+sv_files := $(shell find $(source_dir) -name '*.sv')
+
+trace_file = "$(sim_dir)/../traces/trace.txt"
+
+top_module = "queue_tb"
+sim_opts := \
+	+debug \
+	+tracefile=$(trace_file)
+
+
+VLIB:
+	cd $(sim_dir)
 	vlib work
-	vlog $(sim_dir)/../hdl/global_defs.sv $(sim_dir)/../hdl/parser.sv $(sim_dir)/../hdl/parser_tb.sv
 
-parser_wave:
-	vsim -voptargs=+acc work.parser_tb
-	#add wave -position insertpoint sim:/parser_tb/dut/*
+VLOG: VLIB
+	cd $(sim_dir)
+	vlog $(sv_files)
 
-parser_term:
-	vsim -voptargs=+acc -c work.parser_tb
+all: VLOG
+	cd $(sim_dir)
+	vsim -c -do "run -all ; q" +nowarn3691 \
+		work.$(top_module) \
+		$(sim_opts)
+
+parser: VLOG
+	cd $(sim_dir)
+		vsim -c -do "run -all ; q" +nowarn3691 \
+		work.parser_tb \
+		$(sim_opts)
+
+queue: VLOG
+	cd $(sim_dir)
+		vsim -c -do "run -all ; q" +nowarn3691 \
+		work.queue_tb \
+		$(sim_opts)
+
+gui: VLOG
+	cd $(sim_dir)
+	vsim -voptargs=+acc -do "run -all" +nowarn3691 \ # TODO : add waveform addition commands before "run -all" to display correctly
+		work.$(top_module) \
+		$(sim_opts)
+
+clean:
+	echo "why?"
