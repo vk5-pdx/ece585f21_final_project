@@ -180,8 +180,9 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 		end
 
 		// output from queue
-		decide_output_buffer();
-		bank_status_checks();
+		//decide_output_buffer();
+		//bank_status_checks();
+		decide_bank_operations();
 		bank_status_and_output_update();
 
 
@@ -362,7 +363,7 @@ function automatic bank_status_and_output_update();
 		row        = (row_mask & out_buffer.address) >> ROW_OFFSET;
 		column     = (column_mask & out_buffer.address) >> COLUMN_OFFSET;
 
-		// saturation upcount for
+		// saturation upcount fok
 		if (activate_countup != '1) activate_countup <= activate_countup+1'b1;
 		if (column_countup != '1) column_countup <= column_countup+1'b1;
 
@@ -658,36 +659,119 @@ function automatic bank_status_checks();
 
 endfunction
 
-/*****************************
- * Out Buffer decision block *
- *****************************/
-function automatic decide_output_buffer();
+/*************************************************
+ * Decision block on what to do with queue items *
+ *************************************************/
+function automatic decide_bank_operations();
 	begin
 
 		logic [BG_WIDTH-1:0] bank_group;
 		logic [BANK_WIDTH-1:0] bank;
+		logic [ROW_WIDTH-1:0] row;
+		logic [COLUMN_WIDTH-1:0] column;
 
 		for (int i=0; i<queue.size(); i++) begin    // check if queue command is already active i.e. tracked inside bank status
-			if (is_active[i] == 1'b0) begin          // otherwise just mark it for being inserted
+			// otherwise just mark it for being inserted
+
+			if (is_active[i] == 1'b0) begin
 				bank_group = (bank_group_mask & queue[i].address) >> BG_OFFSET;
 				bank       = (bank_mask & queue[i].address) >> BANK_OFFSET;
+				row        = (row_mask & queue[i].address) >> ROW_OFFSET;
+				column     = (column_mask & queue[i].address) >> COLUMN_OFFSET;
 
 				// bank_status already holds some other command, can't insert new command as active
 				//if (bank_status[(bank_group_mask & queue[i].address) >> BG_OFFSET][(bank_mask & queue[i].address) >> BANK_OFFSET].curr_operation != NO_OP
-				//        || bank_status[(bank_group_mask & queue[i].address) >> BG_OFFSET][(bank_mask & queue[i].address) >> BANK_OFFSET].countdown != '0 ) continue;
-				if (bank_status[bank_group][bank].curr_operation != NO_OP
-				        || bank_status[bank_group][bank].countdown != '0 ) continue;
-				else out_buffer = queue[i];
+					//        || bank_status[(bank_group_mask & queue[i].address) >> BG_OFFSET][(bank_mask & queue[i].address) >> BANK_OFFSET].countdown != '0 ) continue;
+					if (bank_status[bank_group][bank].curr_operation != NO_OP
+						|| bank_status[bank_group][bank].countdown != '0 ) continue;
+					else out_buffer = queue[i]; // TODO : check if out_buffer is redundant
+
+
+					if ($test$plusargs("per_clk") && bank_status[bank_group][bank].countdown != '0)
+						$display("%t :  PER CLOCK  : bank_status[%0d][%0d]:{row:%0d operation:%s add:0x%h cd:%0d q:%0d}, act:0x%h, out:%d, queue:%d",
+						                 $time,
+						                 bank_group,
+						                 bank,
+						                 bank_status[bank_group][bank].curr_row,
+						                 bank_status[bank_group][bank].curr_operation,
+						                 bank_status[bank_group][bank].address,
+						                 bank_status[bank_group][bank].countdown,
+						                 bank_status[bank_group][bank].queue_location,
+						                 is_active,
+						                 is_outputted,
+						                 i);
+
+
+					// checking if new queue item can be inserted in bank_status
+						if (bank_status[bank_group][bank].curr_operation == NO_OP && bank_status[bank_group][bank].countdown == '0) begin // can insert as prev command is done
+
+							bank_status[bank_group][bank].address = queue[i].address;
+
+							is_active[i] = 1'b1;
+							bank_status[bank_group][bank].queue_location = i;
+
+							if ($test$plusargs("debug_dram"))
+								$display("%t : BANK AVLBL. : NO_OP found in bank_status[%0d][%0d] = {curr_row:%0d curr_operation:%s address:0x%h countdown:%0d}",
+								             $time,
+								             bank_group,
+								             bank,
+								             bank_status[bank_group][bank].curr_row,
+								             bank_status[bank_group][bank].curr_operation,
+								             bank_status[bank_group][bank].address,
+								             bank_status[bank_group][bank].countdown);
+
+							if ($test$plusargs("debug_dram"))
+								$display("%t : OPER INSRT. : inserting:{opcode:%p address:0x%h time_cpu:%0d}",
+								             $time,
+								             queue[i].opcode,
+								             queue[i].address,
+								             queue[i].time_cpu);
+
+
+							if ($test$plusargs("debug_dram"))
+								$display("%t :   STATUS    : (open_row,addressed_row):(%0d,%0d) (addressed_bg,prev_bg):(%0d,%0d) prev_op(w/r#):%b",
+								             $time,
+								             bank_status[bank_group][bank].curr_row,
+								             row,
+								             bank_group,
+								             previous_operation.bank_group,
+								             previous_operation.write_read_n);
+
+							if (row == bank_status[bank_group][bank].curr_row) begin // only read / write required
+								if (queue[i].opcode == DATA_READ || queue[i].opcode == OPCODE_FETCH) begin
+									bank_status[bank_group][bank].curr_operation = READ;
+								end
+								if (queue[i].opcode == DATA_WRITE) begin
+									bank_status[bank_group][bank].curr_operation = WRITE;
+								end
+							end
+
+							else begin // pre+act+read/write required
+								if (queue[i].opcode == DATA_READ || queue[i].opcode == OPCODE_FETCH) begin
+									if (bank_status[bank_group][bank].precharge_status_n == 1'b0) bank_status[bank_group][bank].curr_operation = ACT_READ;
+									else bank_status[bank_group][bank].curr_operation = PRE_ACT_READ;
+								end
+							if (queue[i].opcode == DATA_WRITE) begin
+								if (bank_status[bank_group][bank].precharge_status_n == 1'b0) bank_status[bank_group][bank].curr_operation <= ACT_WRITE;
+								else bank_status[bank_group][bank].curr_operation = PRE_ACT_WRITE;
+							end
+					end
+
+
+
+
+
+				end
+			end
+
+			//	// forcing age pop on 1000+ CPU_clock old entries
+			//	if (age[$] >= 1000) begin
+				//		out_buffer = queue[$]; // overwrites decisions to provide minimum QOS of 100 cycles
+				//	end
 
 			end
 		end
 
-		// forcing age pop on 1000+ CPU_clock old entries
-		if (age[$] >= 1000) begin
-			out_buffer = queue[$]; // overwrites decisions to provide minimum QOS of 100 cycles
-		end
-
-end
 endfunction
 
 
