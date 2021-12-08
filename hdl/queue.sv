@@ -14,6 +14,11 @@
 
 import global_defs::*;
 
+// we also need filepath with tracefile, so we extrace PWD using getenv function
+// make use of the SystemVerilog C programming interface
+// https://stackoverflow.com/questions/33394999/how-can-i-know-my-current-path-in-system-verilog
+import "DPI-C" function string getenv(input string env_name);
+
 module queue
 (
 	// inputs
@@ -62,7 +67,7 @@ prev_operation_t previous_operation;
 logic output_allowed_normal;
 
 int unsigned dram_file;
-string dram_filename = "dram";
+string dram_filename;
 
 // for access scheduling, checking if current queue entry is inserted
 logic [QUEUE_SIZE-1:0] is_active;
@@ -80,6 +85,12 @@ logic [TIMER_WIDTH-1:0] activate_countup;
 logic [TIMER_WIDTH-1:0] column_countup;
 
 initial begin : dram_file_open
+	if (!$value$plusargs("outfile=%s", dram_filename)) begin
+		dram_filename = {getenv("PWD"), "/../outs/dram"};
+		$display("No output file provided eg. +outfile=<full_path_to_file>");
+		$display("taking output file as default (%s)", dram_filename);
+	end
+
 	dram_file = $fopen(dram_filename, "w");
 	if (dram_file == 0) begin
 		$fatal("Could not open dram output file (%s)", dram_filename);

@@ -1,32 +1,28 @@
-# ECE 585 Fall 2021 Final Project
+# ECE 585 Fall 2021 Final Project Group 12
 
-output dram command trace file - `sim/dram`
+## some things
+
+* [github repo](https://github.com/vtkhatri/ece585f21_final_project)
+* tracefiles from presentation - `traces/presentation_tracefiles/t*.trace`
+  * output files for these stored in - `outs/t*.out`
+* group tracefiles or checking - `traces/our_tracefiles/*.txt`
+
+---
+
+To execute all presentation tracefiles use single line command -
+
+```
+for i in {0..13}; do make silent tracefile=$PWD/traces/presentation_tracefiles/t$i.trace outfile=$PWD/outs/t$i.out; done
+```
 
 ## build instructions
 
 ```
-make       # just output to sim/dram with minimal prints
-make debug # output to sim/dram and enable all debugging prints
-make dram  # output to sim/dram and enable dram prints
-make queue # output to sim/dram and enable queue prints
+make silent tracefile=<trace_file> outfile=<out_file>
+make all tracefile=<trace_file> outfile=<out_file>    # to get all debug prints, with +per_clk
+make dram tracefile=<trace_file> outfile=<out_file>   # to get dram debug prints only
+make queue tracefile=<trace_file> outfile=<out_file>  # to get queue debug prints only
 ```
-
-## custom tracefile
-
-for Makefile builds, the `traces/trace.txt` symbolic link is used as the input tracefile.\
-this behavior can be changed in 2 ways -
-
-### changing the symbolic link
-
-* remove `traces/trace.txt` symbolic link
-* make a new symbolic link
-```
-cd traces
-ln -s <full_path_to_custom_trace_file> trace.txt
-cd ../sim
-make
-```
-
 ### manually passing as plusarg to vsim command
 
 ```
@@ -34,5 +30,9 @@ cd sim
 vlib work
 vlog ../hdl/global_defs.sv # this is done to ensure package is imported properly
 vlog ../hdl/*.sv
-vsim -c -do "run all ; q" +nowarn3691 work.queue_tb +tracefile=<full_path_to_custom_tracefile>
+vsim -c -do "run all ; q" +nowarn3691 work.queue_tb +tracefile=<trace_file> +outfile=<out_file>
 ```
+
+## report
+
+report is present in `docs/report.md`
