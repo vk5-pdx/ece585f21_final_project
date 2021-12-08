@@ -154,6 +154,11 @@ always_ff@(posedge clk or negedge rst_n) begin : parser_in
 				age.push_front(0);
 				pending_request <= 1'b0;
 				if (is_active != '0) is_active = is_active * 2; // effectively a left shift
+				for (int i=0; i<(2**BG_WIDTH); i++) begin
+					for (int j=0; j<(2**BANK_WIDTH); j++) begin
+						bank_status[i][j].queue_location = bank_status[i][j].queue_location + 1;
+					end
+				end
 
 
 				if ($test$plusargs("debug_queue")) begin
@@ -446,7 +451,7 @@ function automatic bank_status_and_output_update();
 								previous_operation.bank_group <= i;
 								previous_operation.bank <= j;
 
-								is_outputted <= bank_status[i][j].queue_location;
+								is_outputted = bank_status[i][j].queue_location;
 
 								i = 2**BG_WIDTH;
 								j = 2**BANK_WIDTH;
@@ -470,7 +475,7 @@ function automatic bank_status_and_output_update();
 								previous_operation.bank_group <= i;
 								previous_operation.bank <= j;
 
-								is_outputted <= bank_status[i][j].queue_location;
+								is_outputted = bank_status[i][j].queue_location;
 
 								to_break = 1'b1;
 
@@ -628,17 +633,18 @@ function automatic bank_status_checks();
 		// for now having non-scheduled memory access, no need to check
 		// curr_operation, just insert
 
-		if ($test$plusargs("per_clk") && bank_status[bank_group][bank].countdown != '0) $display("%t :  PER CLOCK  : bank_status[%0d][%0d]:{curr_row:%0d curr_operation:%s address:0x%h countdown:%0d q:%0d}, is_active:0x%h, is_outputted:%d",
-		                                            $time,
-		                                            bank_group,
-		                                            bank,
-		                                            bank_status[bank_group][bank].curr_row,
-		                                            bank_status[bank_group][bank].curr_operation,
-		                                            bank_status[bank_group][bank].address,
-		                                            bank_status[bank_group][bank].countdown,
-		                                            bank_status[bank_group][bank].queue_location,
-		                                            is_active,
-		                                            is_outputted);
+		if ($test$plusargs("per_clk") && bank_status[bank_group][bank].countdown != '0)
+			$display("%t :  PER CLOCK  : bank_status[%0d][%0d]:{curr_row:%0d curr_operation:%s address:0x%h countdown:%0d q:%0d}, is_active:0x%h, is_outputted:%d",
+			            $time,
+			            bank_group,
+			            bank,
+			            bank_status[bank_group][bank].curr_row,
+			            bank_status[bank_group][bank].curr_operation,
+			            bank_status[bank_group][bank].address,
+			            bank_status[bank_group][bank].countdown,
+			            bank_status[bank_group][bank].queue_location,
+			            is_active,
+			            is_outputted);
 
 
 		if (bank_status[bank_group][bank].curr_operation == NO_OP && bank_status[bank_group][bank].countdown == '0) begin // can insert as prev command is done
@@ -713,7 +719,7 @@ function automatic decide_bank_operations();
 		logic [ROW_WIDTH-1:0] row;
 		logic [COLUMN_WIDTH-1:0] column;
 
-		for (int i=0; i<queue.size(); i++) begin    // check if queue command is already active i.e. tracked inside bank status
+		for (int i=queue.size()-1; i>=0; i--) begin    // check if queue command is already active i.e. tracked inside bank status
 			// otherwise just mark it for being inserted
 
 			if ($test$plusargs("per_clk") && bank_status[bank_group][bank].countdown != '0)
