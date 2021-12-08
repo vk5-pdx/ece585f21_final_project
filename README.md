@@ -2,7 +2,7 @@
 
 ## some things
 
-* [github repo](https://github.com/vtkhatri/ece585f21_final_project)
+* [github repo](https://github.com/vtkhatri/dram_memory_controller)
 * tracefiles from presentation - `traces/presentation_tracefiles/t*.trace`
   * output files for these stored in - `outs/t*.out`
 * group tracefiles or checking - `traces/our_tracefiles/*.txt`
