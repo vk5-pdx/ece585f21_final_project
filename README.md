@@ -35,4 +35,4 @@ vsim -c -do "run all ; q" +nowarn3691 work.queue_tb +tracefile=<trace_file> +out
 
 ## report
 
-report is present in `docs/report.md`
+report is present [here](docs/report.md)
