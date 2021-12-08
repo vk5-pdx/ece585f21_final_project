@@ -108,6 +108,7 @@ typedef struct packed {
 
 	logic                       [$clog2(QUEUE_SIZE)-1:0] queue_location;
 	logic                                           precharge_status_n;
+	logic                                           activation_status_n;
 	logic                       [ROW_WIDTH-1:0]     curr_row;
 	operations_to_do_in_order_t                     curr_operation;
 	logic                       [ADDRESS_WIDTH-1:0] address;

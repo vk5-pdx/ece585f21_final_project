@@ -506,6 +506,7 @@ function automatic bank_status_and_output_update();
 
 								// precharge is used to activate, not precharged now
 								bank_status[i][j].precharge_status_n <= 1'b1;
+								bank_status[i][j].activation_status_n <= 1'b1;
 
 								to_break = 1'b1;
 
@@ -535,6 +536,7 @@ function automatic bank_status_and_output_update();
 
 								// precharge is used to activate, not precharged now
 								bank_status[i][j].precharge_status_n <= 1'b1;
+								bank_status[i][j].activation_status_n <= 1'b1;
 
 								to_break = 1'b1;
 
@@ -552,6 +554,7 @@ function automatic bank_status_and_output_update();
 								bank_status[i][j].countdown <= T_RP;
 
 								to_break = 1'b1;
+								bank_status[i][j].activation_status_n <= 1'b0;
 
 								i = 2**BG_WIDTH;
 								j = 2**BANK_WIDTH;
@@ -567,6 +570,7 @@ function automatic bank_status_and_output_update();
 								bank_status[i][j].countdown <= T_RP;
 
 								to_break = 1'b1;
+								bank_status[i][j].activation_status_n <= 1'b0;
 
 								i = 2**BG_WIDTH;
 								j = 2**BANK_WIDTH;
@@ -682,7 +686,7 @@ function automatic bank_status_checks();
 			                                       previous_operation.bank_group,
 			                                       previous_operation.write_read_n);
 
-			if (row == bank_status[bank_group][bank].curr_row) begin // only read / write required
+			if (row == bank_status[bank_group][bank].curr_row && bank_status[bank_group][bank].activation_status_n != 0) begin // only read / write required
 				if (out_buffer.opcode == DATA_READ || out_buffer.opcode == OPCODE_FETCH) begin
 					bank_status[bank_group][bank].curr_operation = READ;
 				end
@@ -788,7 +792,7 @@ function automatic decide_bank_operations();
 								             previous_operation.bank_group,
 								             previous_operation.write_read_n);
 
-							if (row == bank_status[bank_group][bank].curr_row) begin // only read / write required
+							if (row == bank_status[bank_group][bank].curr_row && bank_status[bank_group][bank].activation_status_n == 1'b1) begin // only read / write required
 								if (queue[i].opcode == DATA_READ || queue[i].opcode == OPCODE_FETCH) begin
 									bank_status[bank_group][bank].curr_operation = READ;
 								end
