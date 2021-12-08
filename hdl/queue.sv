@@ -340,13 +340,13 @@ function automatic dram_file_print(logic [ADDRESS_WIDTH-1:0] address, DRAM_comma
 		$fwrite(dram_file, "%0t\t%p", curr_time, opcode);
 		unique case(opcode)
 			RD: begin
-				$fwrite(dram_file, "\t%0d %0d %0d", bank_group, bank, column);
+				$fwrite(dram_file, "\t%0d %0d %0h", bank_group, bank, column);
 			end
 			WR: begin
-				$fwrite(dram_file, "\t%0d %0d %0d", bank_group, bank, column);
+				$fwrite(dram_file, "\t%0d %0d %0h", bank_group, bank, column);
 			end
 			ACT: begin
-				$fwrite(dram_file, "\t%0d %0d %0d", bank_group, bank, row);
+				$fwrite(dram_file, "\t%0d %0d %0h", bank_group, bank, row);
 			end
 			PRE: begin
 				$fwrite(dram_file, "\t%0d %0d", bank_group, bank);
