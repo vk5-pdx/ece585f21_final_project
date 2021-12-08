@@ -1,6 +1,9 @@
+work/
+transcript
 sim/work
 sim/transcript
 sim/dram
+outs/
 sim/*.wlf
 sim/*.mti
 sim/*.mpf

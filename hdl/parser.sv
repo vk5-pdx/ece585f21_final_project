@@ -85,7 +85,7 @@ always_ff@(posedge clk ) begin
 		if (next_state == NEW_OP && queue_time >= parsed_clock) begin
 			if ($feof(trace_file)) curr_state <= WAITE;
 			else begin
-				scan_file = $fscanf(trace_file, "%h %h %h", parsed_clock, parsed_op_int, parsed_address);
+				scan_file = $fscanf(trace_file, "%d %h %h", parsed_clock, parsed_op_int, parsed_address);
 				if (!(parsed_op_int === 0 || parsed_op_int === 1 || parsed_op_int === 2)) begin
 					$display("well played bro, I give up.");
 					$finish;
