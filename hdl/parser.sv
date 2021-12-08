@@ -42,6 +42,7 @@ string trace_filename;
 
 
 // variables to store input from trace file
+int parsed_op_int;
 logic                    [31:0] parsed_clock = '0;
 parsed_op_t                     parsed_op = NOP;
 logic       [ADDRESS_WIDTH-1:0] parsed_address = 'x;
@@ -84,8 +85,15 @@ always_ff@(posedge clk ) begin
 		if (next_state == NEW_OP && queue_time >= parsed_clock) begin
 			if ($feof(trace_file)) curr_state <= WAITE;
 			else begin
-				scan_file = $fscanf(trace_file, "%d %d %h", parsed_clock, parsed_op, parsed_address);
-				if(scan_file != 3) begin
+				scan_file = $fscanf(trace_file, "%h %h %h", parsed_clock, parsed_op_int, parsed_address);
+				if (!(parsed_op_int === 0 || parsed_op_int === 1 || parsed_op_int === 2)) begin
+					$display("well played bro, I give up.");
+					$finish;
+				end
+				else begin
+					parsed_op <= parsed_op_t'(parsed_op_int);
+				end
+				if(scan_file == 0) begin
 					$display("Invalid trace_file entry, could not read 3 items from tracefile\n");
 					$finish;
 				end

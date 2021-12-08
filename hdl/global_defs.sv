@@ -21,8 +21,8 @@ parameter QUEUE_SIZE = 16;
 
 typedef logic[31:0] int_t;
 
-parameter BITS_FOR_100 = $clog2(100);
-typedef logic[BITS_FOR_100-1:0] age_counter_t;
+parameter BITS_FOR_1000000 = $clog2(1000000);
+typedef logic[BITS_FOR_1000000-1:0] age_counter_t;
 
 // 3 possible opcodes present in file + NOP extra
 typedef enum logic[1:0] {
@@ -49,6 +49,11 @@ typedef struct packed {
 
 } parser_out_struct_t;
 
+parameter BG_WIDTH = 2;
+parameter BANK_WIDTH = 2;
+parameter COLUMN_WIDTH = 8;
+parameter ROW_WIDTH = 15;
+
 parameter BG_OFFSET = 6;
 parameter BANK_OFFSET = 8;
 parameter COLUMN_OFFSET = 10;
@@ -61,23 +66,83 @@ parameter [ADDRESS_WIDTH-1:0] row_mask        = ( {15{1'b1}} << ROW_OFFSET );
 
 // DRAM timing constraints in CPU clock cycles
 // CPU clock - 3.2GHz, DRAM clock - 1.6GHz
-parameter T_RC    = 152;      // 76 DRAM Cycles
-parameter T_RAS   = 104;      // 52
-parameter T_RRD_L = 12;       // 6
-parameter T_RRD_S = 8;        // 4
-parameter T_RP    = 48;       // 24
-parameter T_RFC   = 1120;     // 350ns for a 312.5ps CPU clock period
-parameter T_CWD   = 40;       // 20
-parameter T_CAS   = 48;       // 24
-parameter T_RCD   = 48;       // 24
-parameter T_WR    = 40;       // 20
-parameter T_RTP   = 24;       // 12
-parameter T_CCD_L = 16;       // 8
-parameter T_CCD_S = 8;        // 4
-parameter T_BURST = 8;        // 4
-parameter T_WTR_L = 24;       // 12
-parameter T_WTR_S = 8;        // 4
-parameter T_REFI  = 24960000; // 7.8us for 312.5ps CPU clock period
+parameter T_RC    = 152;   // 76 DRAM Cycles
+parameter T_RAS   = 104;   // 52
+parameter T_RRD_L = 12;    // 6
+parameter T_RRD_S = 8;     // 4
+parameter T_RP    = 48;    // 24
+parameter T_RFC   = 1120;  // 560 -> 350ns for a 312.5ps CPU clock period
+parameter T_CWD   = 40;    // 20
+parameter T_CAS   = 48;    // 24
+parameter T_RCD   = 48;    // 24
+parameter T_WR    = 40;    // 20
+parameter T_RTP   = 24;    // 12
+parameter T_CCD_L = 16;    // 8
+parameter T_CCD_S = 8;     // 4
+parameter T_BURST = 8;     // 4
+parameter T_WTR_L = 24;    // 12
+parameter T_WTR_S = 8;     // 4
+parameter T_REFI  = 24960; // 12480 -> 7.8us for 312.5ps CPU clock period
+
+// all possible operation orders
+parameter OP_ORDER_NO = 9;
+parameter OP_ORDER_NO_BITS = $clog2(OP_ORDER_NO);
+typedef enum logic [OP_ORDER_NO_BITS-1:0] {
+	NO_OP,
+	READ,              // row already activated, only READ required to take correct columns output
+	WRITE,             // row already activated
+	ACT_READ,          // bank pre-charged, need to activate row and read column
+	PRE_ACT_READ,      // bank not pre-charged, need to activate row and read
+	ACT_WRITE,         // same as read
+	PRE_ACT_WRITE,     // same as read
+	TR_L_PRE_ACT_READ, // Previous command to same bank, and currently loaded row is wrong, incur T_RRD_L + PRE penalty
+	TR_S_PRE_ACT_READ, // Previous command to different back, but currently loaded row in bank is wrong, T_RRD_S + PRE required
+	TC_L_READ,         // Previous command in same bank, but my currently loaded row is correct, only T_CCD_L penalty
+	TC_S_READ          // Previous command to different bank, but my currently loaded row is correct, T_CCD_S penalty
+} operations_to_do_in_order_t;
+
+// 2-2d structure to keep track of status of 16 banks
+parameter TIMER_WIDTH = $clog2(T_RC); // biggest of all delays
+
+typedef struct packed {
+
+	logic                                           precharge_status_n;
+	logic                       [ROW_WIDTH-1:0]     curr_row;
+	operations_to_do_in_order_t                     curr_operation;
+	logic                       [ADDRESS_WIDTH-1:0] address;
+	logic                       [TIMER_WIDTH-1:0]   countdown;
+	logic                       [TIMER_WIDTH-1:0]   ras_countdown; // from current activate to next precharge ROW_ADDRESS_STROBE
+	                                                               // should happen parallel to normal operation countdown
+	logic                       [TIMER_WIDTH-1:0]   rc_countdown; // only checking in current bank, but otherwise same as oper
+
+} bank_status_t;
+
+// all DRAM commands
+typedef enum logic [2:0] {
+
+	RD,
+	WR,
+	ACT,
+	PRE,
+	REF
+
+} DRAM_commands_t;
+
+// full output to DRAM
+typedef struct packed {
+
+	DRAM_commands_t                     opcode;
+	logic           [ADDRESS_WIDTH-1:0] address;
+
+} dram_output_t;
+
+typedef struct packed {
+
+	logic [BG_WIDTH-1:0]   bank_group;
+	logic [BANK_WIDTH-1:0] bank;
+	logic                  write_read_n;
+
+} prev_operation_t;
 
 endpackage : global_defs
 
