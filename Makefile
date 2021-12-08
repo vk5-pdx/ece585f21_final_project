@@ -20,7 +20,7 @@ silent: VLOG
 		$(plus_args)
 
 VLIB:
-	mkdir -p $(sim_dir)
+	mkdir -p $(sim_dir) $(out_dir)
 	cd $(sim_dir)
 	vlib work
 
